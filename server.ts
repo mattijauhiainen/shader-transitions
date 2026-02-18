@@ -1,3 +1,5 @@
+import { readdirSync } from "fs";
+
 const server = Bun.serve({
   port: 4000,
   async fetch(req) {
@@ -14,6 +16,20 @@ const server = Bun.serve({
       return new Response(Bun.file("style.css"), {
         headers: { "Content-Type": "text/css" },
       });
+    }
+
+    if (path === "/images") {
+      const files = readdirSync("./images")
+        .filter((f) => f.endsWith(".avif"))
+        .sort()
+        .map((f) => `/images/${f}`);
+      return new Response(JSON.stringify(files), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (path.startsWith("/images/")) {
+      return new Response(Bun.file(`.${path}`));
     }
 
     if (path === "/index.ts") {
