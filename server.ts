@@ -1,36 +1,25 @@
 import { readdirSync } from "fs";
 
+const CONTENT_TYPES: Record<string, string> = {
+  ".html": "text/html",
+  ".css": "text/css",
+  ".js": "application/javascript",
+  ".avif": "image/avif",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+};
+
 const server = Bun.serve({
   port: 4000,
   async fetch(req) {
     const url = new URL(req.url);
     const path = url.pathname;
 
-    if (path === "/halftone-gl.html") {
-      return new Response(Bun.file("halftone-gl.html"), {
-        headers: { "Content-Type": "text/html" },
-      });
-    }
-
-    if (path === "/halftone-gl.ts") {
-      const result = await Bun.build({
-        entrypoints: ["./halftone-gl.ts"],
-        target: "browser",
-      });
-      return new Response(await result.outputs[0].text(), {
-        headers: { "Content-Type": "application/javascript" },
-      });
-    }
-
     if (path === "/" || path === "/index.html") {
       return new Response(Bun.file("index.html"), {
         headers: { "Content-Type": "text/html" },
-      });
-    }
-
-    if (path === "/style.css") {
-      return new Response(Bun.file("style.css"), {
-        headers: { "Content-Type": "text/css" },
       });
     }
 
@@ -44,17 +33,22 @@ const server = Bun.serve({
       });
     }
 
-    if (path.startsWith("/images/")) {
-      return new Response(Bun.file(`.${path}`));
-    }
-
     if (path === "/index.ts") {
       const result = await Bun.build({
         entrypoints: ["./index.ts"],
         target: "browser",
       });
-      return new Response(await result.outputs[0].text(), {
+      return new Response(await result.outputs[0]!.text(), {
         headers: { "Content-Type": "application/javascript" },
+      });
+    }
+
+    const ext = path.substring(path.lastIndexOf("."));
+    const contentType = CONTENT_TYPES[ext];
+    const file = Bun.file(`.${path}`);
+    if (contentType && await file.exists()) {
+      return new Response(file, {
+        headers: { "Content-Type": contentType },
       });
     }
 
