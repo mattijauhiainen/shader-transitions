@@ -106,6 +106,78 @@ function setupPass1() {
   return { program, texture, fbo };
 }
 
+function setupPassReduce() {
+  const program = createProgram(vertSrc, `#version 300 es
+    precision highp float;
+    uniform sampler2D uTexture;   // input texture for this step
+    uniform vec2 uInputSize;      // pixel dimensions of the input texture
+    uniform bool uIsFirstStep;    // true on first step — input is RGB colors, not (minLuma, maxLuma)
+    out vec4 fragColor;
+
+    void main() {
+      vec2 texel = 1.0 / uInputSize;                               // size of one input pixel in UV space
+      vec2 uv = (floor(gl_FragCoord.xy) * 2.0 + 0.5) / uInputSize; // UV of top-left pixel of the 2×2 input block
+
+      // sample the 2×2 block of input pixels
+      vec4 a = texture(uTexture, uv);
+      vec4 b = texture(uTexture, uv + vec2(texel.x, 0.0));
+      vec4 c = texture(uTexture, uv + vec2(0.0, texel.y));
+      vec4 d = texture(uTexture, uv + vec2(texel.x, texel.y));
+
+      float minL, maxL;
+      if (uIsFirstStep) {
+        // input is RGB averaged colors from pass 1 — compute luma for each
+        vec3 lw = vec3(0.2126, 0.7152, 0.0722);
+        float la = dot(a.rgb, lw);
+        float lb = dot(b.rgb, lw);
+        float lc = dot(c.rgb, lw);
+        float ld = dot(d.rgb, lw);
+        minL = min(min(la, lb), min(lc, ld));
+        maxL = max(max(la, lb), max(lc, ld));
+      } else {
+        // input is (minLuma, maxLuma) from a previous reduction step — propagate them
+        minL = min(min(a.r, b.r), min(c.r, d.r));
+        maxL = max(max(a.g, b.g), max(c.g, d.g));
+      }
+
+      fragColor = vec4(minL, maxL, 0.0, 1.0); // store min in R, max in G
+    }
+  `)
+
+  // pre-compute the size at each step
+  const sizes: [number, number][] = [];
+  let w = cols, h = rows;
+  while (w > 1 || h > 1) {
+    w = Math.max(1, Math.ceil(w / 2));
+    h = Math.max(1, Math.ceil(h / 2));
+    sizes.push([w, h]);
+  }
+  // sizes[sizes.length - 1] is always [1, 1]
+
+  // create a texture + FBO for each step
+  const steps = sizes.map(([w, h]) => {
+    const texture = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+
+    const fbo = gl.createFramebuffer()!;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+    return { texture, fbo, w, h };
+  });
+
+  gl.useProgram(program);
+  gl.uniform1i(gl.getUniformLocation(program, "uTexture"), 0);
+  gl.useProgram(null);
+
+  return { program, steps };
+}
+
 // --- pass 2: render halftone to canvas ---
 
 // Compiles the halftone shader and pre-loads all uniforms that never change between renders.
@@ -117,6 +189,7 @@ function setupPass2() {
     uniform float uCellSize;     // max dot diameter in pixels
     uniform float uPitch;        // cell + gap size in pixels
     uniform vec2 uCellCount;     // grid dimensions (cols, rows)
+    uniform sampler2D uLumaRange;  // 1×1 texture: R = minLuma, G = maxLuma
 
     in vec2 vUV;
     out vec4 fragColor;
@@ -127,11 +200,13 @@ function setupPass2() {
       vec2 uv = (cellCoord + 0.5) / uCellCount;               // UV into the small texture — one texel per cell
       vec4 color = texture(uTexture, uv);                      // averaged color of this cell from pass 1
 
-      float luma = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722)); // perceptual brightness of the cell
-      float radius = sqrt(luma) * uCellSize * 0.5;             // dot radius — sqrt gives perceptually linear growth
+      vec2 lumaRange = texture(uLumaRange, vec2(0.5)).rg;  // sample center of 1×1 tex — R=min, G=max
+      float luma = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
+      float normalizedLuma = (luma - lumaRange.r) / (lumaRange.g - lumaRange.r);
+      float radius = sqrt(normalizedLuma) * uCellSize * 0.5;
       float dist = length(gl_FragCoord.xy - cellCenter);       // distance from this pixel to the cell center
-      float alpha = smoothstep(radius + 0.5, radius - 0.5, dist);
-      fragColor = mix(vec4(0, 0, 0, 1), color, alpha);
+      float alpha = smoothstep(radius + 0.5, radius - 0.5, dist); // smooth 1px edge instead of hard cutoff
+      fragColor = mix(vec4(0, 0, 0, 1), color, alpha);         // blend between black and dot color at the edge
     }
   `);
 
@@ -140,12 +215,14 @@ function setupPass2() {
   gl.uniform1f(gl.getUniformLocation(program, "uPitch"), PITCH);          // cell + gap size in pixels
   gl.uniform2f(gl.getUniformLocation(program, "uCellCount"), cols, rows); // grid dimensions
   gl.uniform1i(gl.getUniformLocation(program, "uTexture"), 0);            // always read from texture slot 0
+  gl.uniform1i(gl.getUniformLocation(program, "uLumaRange"), 1);
   gl.useProgram(null);                                                     // unbind — uniforms are stored in the program object
 
   return { program };
 }
 
 const pass1 = setupPass1();
+const passReduce = setupPassReduce();
 const pass2 = setupPass2();
 
 const loc = gl.getAttribLocation(pass2.program, "aPosition");
@@ -182,6 +259,31 @@ function runPass1(srcTex: WebGLTexture) {
   gl.bindTexture(gl.TEXTURE_2D, null);             // unbind texture
 }
 
+function runPassReduce() {
+  gl.useProgram(passReduce.program);
+  gl.activeTexture(gl.TEXTURE0);
+
+  let inputTexture = pass1.texture;
+  let inputW = cols, inputH = rows;
+
+  for (let i = 0; i < passReduce.steps.length; i++) {
+    const step = passReduce.steps[i];
+    gl.bindFramebuffer(gl.FRAMEBUFFER, step.fbo);
+    gl.viewport(0, 0, step.w, step.h);
+    gl.bindTexture(gl.TEXTURE_2D, inputTexture);
+    gl.uniform2f(gl.getUniformLocation(passReduce.program, "uInputSize"), inputW, inputH);
+    gl.uniform1i(gl.getUniformLocation(passReduce.program, "uIsFirstStep"), i === 0 ? 1 : 0);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    inputTexture = step.texture;
+    inputW = step.w;
+    inputH = step.h;
+  }
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.bindTexture(gl.TEXTURE_2D, null);
+}
+
 // Renders the halftone pattern to the canvas using averaged cell colors from pass1.texture.
 function runPass2() {
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);        // render to canvas
@@ -189,6 +291,11 @@ function runPass2() {
   gl.useProgram(pass2.program);                    // halftone shader
   gl.activeTexture(gl.TEXTURE0);                   // activate slot 0
   gl.bindTexture(gl.TEXTURE_2D, pass1.texture);    // put the averaged cell texture in slot 0
+
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D, passReduce.steps[passReduce.steps.length - 1].texture);
+  gl.activeTexture(gl.TEXTURE0);  // restore slot 0 as active for pass1.texture
+
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);          // draw fullscreen quad — shader renders halftone dots
   gl.bindTexture(gl.TEXTURE_2D, null);             // unbind texture
 }
@@ -197,6 +304,7 @@ const img = new Image();
 img.onload = () => {
   const srcTex = uploadImage(img);
   runPass1(srcTex);
+  runPassReduce();
   runPass2();
 };
 img.src = "/images/clockenflap.avif";
