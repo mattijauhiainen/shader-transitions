@@ -4,160 +4,190 @@ canvas.height = window.innerHeight;
 
 const gl = canvas.getContext("webgl2")!;
 
+// --- shared ---
+
 const PITCH = 7.0;
 const cols = Math.ceil(canvas.width / PITCH);
 const rows = Math.ceil(canvas.height / PITCH);
 
-const smallTex = gl.createTexture()
-gl.bindTexture(gl.TEXTURE_2D, smallTex)
-gl.texImage2D(
-  gl.TEXTURE_2D,
-  0,
-  gl.RGBA,
-  cols,
-  rows,
-  0,
-  gl.RGBA,
-  gl.UNSIGNED_BYTE, null
-)
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+function createProgram(vertSrc: string, fragSrc: string) {
+  const vert = gl.createShader(gl.VERTEX_SHADER)!;
+  gl.shaderSource(vert, vertSrc);
+  gl.compileShader(vert);
+  console.log("vert:", gl.getShaderInfoLog(vert));
 
-const fbo = gl.createFramebuffer()
-gl.bindFramebuffer(gl.FRAMEBUFFER, fbo)
-gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, smallTex, 0)
+  const frag = gl.createShader(gl.FRAGMENT_SHADER)!;
+  gl.shaderSource(frag, fragSrc);
+  gl.compileShader(frag);
+  console.log("frag:", gl.getShaderInfoLog(frag));
 
-const vertexShaderInput = `#version 300 es
+  const program = gl.createProgram()!;
+  gl.attachShader(program, vert);
+  gl.attachShader(program, frag);
+  gl.linkProgram(program);
+  console.log("link:", gl.getProgramInfoLog(program));
+
+  return program;
+}
+
+const vertSrc = `#version 300 es
   in vec2 aPosition;
   out vec2 vUV;
   void main() {
-    vUV = aPosition * 0.5 + 0.5; // convert -1..1 to 0..1
+    vUV = aPosition * 0.5 + 0.5;
     gl_Position = vec4(aPosition, 0.0, 1.0);
   }
-`
-const vertexShader = gl.createShader(gl.VERTEX_SHADER)!;
-gl.shaderSource(vertexShader, vertexShaderInput);
-gl.compileShader(vertexShader);
-
-const passthroughShaderInput = `#version 300 es
-  precision highp float;
-  uniform sampler2D uTexture;
-  in vec2 vUV;
-  out vec4 fragColor;
-  void main() {
-    fragColor = texture(uTexture, vUV);
-  }
-`
-const passthroughShader = gl.createShader(gl.FRAGMENT_SHADER)!;
-gl.shaderSource(passthroughShader, passthroughShaderInput);
-gl.compileShader(passthroughShader);
-
-const passthroughProgram = gl.createProgram()!;
-gl.attachShader(passthroughProgram, vertexShader);
-gl.attachShader(passthroughProgram, passthroughShader);
-gl.linkProgram(passthroughProgram);
-gl.useProgram(passthroughProgram);
-const meh = gl.getAttribLocation(passthroughProgram, "aPosition")
-gl.enableVertexAttribArray(meh);                          // activate it
-
-const fragmentShaderInput = `#version 300 es
-  precision highp float;
-  uniform sampler2D uTexture;
-  uniform float uCellSize;   // diameter of each cell (e.g. 6.0)
-  uniform float uPitch;      // cell + gap (e.g. 7.0)
-  uniform vec2 uCellCount;
-
-  in vec2 vUV;
-  out vec4 fragColor;
-
-  void main() {
-    vec2 cellCoord = floor(gl_FragCoord.xy / uPitch);
-    vec2 cellCenter = (cellCoord + 0.5) * uPitch;
-    vec2 uv = (cellCoord + 0.5) / uCellCount;
-    vec4 color = texture(uTexture, uv);
-
-    float luma = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
-    float radius = sqrt(luma) * uCellSize * 0.5;
-    float dist = length(gl_FragCoord.xy - cellCenter);
-    if (dist < radius) {
-      fragColor = color;         // inside dot → image color
-    } else {
-      fragColor = vec4(0, 0, 0, 1);  // outside dot → black background
-    }
-  }
-`
-
-const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER)!;
-gl.shaderSource(fragmentShader, fragmentShaderInput);
-gl.compileShader(fragmentShader);
-
-const program = gl.createProgram()!;
-gl.attachShader(program, vertexShader);
-gl.attachShader(program, fragmentShader);
-gl.linkProgram(program);
-gl.useProgram(program);
-
-const htLoc = gl.getUniformLocation(program, "uTexture");
-gl.uniform1i(htLoc, 0);
-
-// float: one float
-const cellLoc = gl.getUniformLocation(program, "uCellSize");
-gl.uniform1f(cellLoc, 6.0);
-
-const pitchLoc = gl.getUniformLocation(program, "uPitch");
-gl.uniform1f(pitchLoc, PITCH);
+`;
 
 const positions = new Float32Array([
-  -1, -1,   // bottom-left
-   1, -1,   // bottom-right
-  -1,  1,   // top-left
-   1,  1,   // top-right
+  -1, -1,
+   1, -1,
+  -1,  1,
+   1,  1,
 ]);
+const buffer = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
 
-const buffer = gl.createBuffer();        // allocate a buffer on the GPU
-gl.bindBuffer(gl.ARRAY_BUFFER, buffer);  // "I'm talking about this buffer now"
-gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);  // upload the data
+// --- pass 1: downsample image into smallTex via fbo ---
 
-const loc = gl.getAttribLocation(program, "aPosition");  // find the input by name
-gl.enableVertexAttribArray(loc);                          // activate it
-gl.vertexAttribPointer(
-  loc,       // which attribute
-  2,         // how many floats per vertex (we have x, y)
-  gl.FLOAT,  // data type
-  false,     // don't normalize
-  0,         // stride: 0 means "tightly packed"
-  0          // offset: start at the beginning of the buffer
-);
+// Sets up the render target for pass 1: a cols×rows texture backed by an FBO.
+// The passthrough shader simply copies whatever source texture is bound.
+// The GPU does the averaging implicitly via mipmaps when downsampling to cols×rows.
+// Leaves no bindings active. Returns the program, texture, and FBO for use at render time.
+function setupPass1() {
+  const program = createProgram(vertSrc, `#version 300 es
+    precision highp float;
+    uniform sampler2D uTexture;
+    in vec2 vUV;
+    out vec4 fragColor;
+    void main() {
+      fragColor = texture(uTexture, vUV); // passthrough — copy input pixel to output
+    }
+  `);
+
+  const texture = gl.createTexture()!;  // allocate a texture object on the GPU
+  gl.bindTexture(gl.TEXTURE_2D, texture); // target it for configuration
+  // texImage2D defines the texture's size, format, and optionally its pixel data.
+  // Think of it as "declare and allocate" — it tells the GPU how big the texture is
+  // and what format each pixel uses. Passing null for data allocates empty GPU memory
+  // that the FBO will write into during pass 1.
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0,           // mip level 0 (base)
+    gl.RGBA,     // internal format — how the GPU stores the data
+    cols,        // width: one pixel per halftone column
+    rows,        // height: one pixel per halftone row
+    0,           // border (must be 0 in WebGL)
+    gl.RGBA,     // pixel format of the data we're providing
+    gl.UNSIGNED_BYTE, // data type of each channel
+    null         // no initial data — GPU allocates empty memory, pass 1 will fill it
+  );
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); // no interpolation when shrinking — each texel maps exactly to one cell
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); // no interpolation when enlarging — same reason
+
+  const fbo = gl.createFramebuffer()!;  // allocate a framebuffer object — a render target
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo); // target it for configuration
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0); // attach the texture as the color output — GPU writes rendered pixels into it
+
+  gl.bindTexture(gl.TEXTURE_2D, null);    // unbind — configuration is stored in the texture object
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); // unbind — restore canvas as the default render target
+
+  return { program, texture, fbo };
+}
+
+// --- pass 2: render halftone to canvas ---
+
+// Compiles the halftone shader and pre-loads all uniforms that never change between renders.
+// Leaves no bindings active. Returns the program for use at render time.
+function setupPass2() {
+  const program = createProgram(vertSrc, `#version 300 es
+    precision highp float;
+    uniform sampler2D uTexture;  // the cols×rows averaged cell texture from pass 1
+    uniform float uCellSize;     // max dot diameter in pixels
+    uniform float uPitch;        // cell + gap size in pixels
+    uniform vec2 uCellCount;     // grid dimensions (cols, rows)
+
+    in vec2 vUV;
+    out vec4 fragColor;
+
+    void main() {
+      vec2 cellCoord = floor(gl_FragCoord.xy / uPitch);        // which cell this pixel belongs to
+      vec2 cellCenter = (cellCoord + 0.5) * uPitch;            // pixel coordinate of that cell's center
+      vec2 uv = (cellCoord + 0.5) / uCellCount;               // UV into the small texture — one texel per cell
+      vec4 color = texture(uTexture, uv);                      // averaged color of this cell from pass 1
+
+      float luma = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722)); // perceptual brightness of the cell
+      float radius = sqrt(luma) * uCellSize * 0.5;             // dot radius — sqrt gives perceptually linear growth
+      float dist = length(gl_FragCoord.xy - cellCenter);       // distance from this pixel to the cell center
+      if (dist < radius) {
+        fragColor = color;                   // inside the dot — draw with the cell's color
+      } else {
+        fragColor = vec4(0, 0, 0, 1);        // outside the dot — draw black
+      }
+    }
+  `);
+
+  gl.useProgram(program);                                                  // activate program so uniform calls target it
+  gl.uniform1f(gl.getUniformLocation(program, "uCellSize"), 6.0);         // max dot diameter in pixels
+  gl.uniform1f(gl.getUniformLocation(program, "uPitch"), PITCH);          // cell + gap size in pixels
+  gl.uniform2f(gl.getUniformLocation(program, "uCellCount"), cols, rows); // grid dimensions
+  gl.uniform1i(gl.getUniformLocation(program, "uTexture"), 0);            // always read from texture slot 0
+  gl.useProgram(null);                                                     // unbind — uniforms are stored in the program object
+
+  return { program };
+}
+
+const pass1 = setupPass1();
+const pass2 = setupPass2();
+
+const loc = gl.getAttribLocation(pass2.program, "aPosition");
+gl.enableVertexAttribArray(loc);
+gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+// Uploads an image to the GPU as a texture with mipmaps for averaging.
+// Returns the texture object. Leaves no bindings active.
+function uploadImage(img: HTMLImageElement) {
+  const srcTex = gl.createTexture()!;
+  gl.bindTexture(gl.TEXTURE_2D, srcTex);           // target this texture for configuration
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);    // flip y so (0,0) is bottom-left, matching gl_FragCoord
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img); // upload pixel data to GPU
+  gl.generateMipmap(gl.TEXTURE_2D);                // precompute averaged downsized versions for pass 1
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); // use mipmaps when shrinking
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);               // interpolate when enlarging
+  gl.bindTexture(gl.TEXTURE_2D, null);             // unbind — configuration is stored in the texture object
+  return srcTex;
+}
+
+// Downsamples srcTex into pass1.texture via the FBO.
+// Each texel in pass1.texture becomes the averaged color of one halftone cell.
+function runPass1(srcTex: WebGLTexture) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, pass1.fbo);   // render into pass1.texture instead of the canvas
+  gl.viewport(0, 0, cols, rows);                   // one output pixel per cell
+  gl.useProgram(pass1.program);                    // passthrough shader — just copies the texture
+  gl.activeTexture(gl.TEXTURE0);                   // activate slot 0
+  gl.bindTexture(gl.TEXTURE_2D, srcTex);           // put the source image in slot 0
+  gl.uniform1i(gl.getUniformLocation(pass1.program, "uTexture"), 0); // tell shader to read from slot 0
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);          // draw fullscreen quad — GPU averages via mipmaps
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);        // unbind FBO — restore canvas as render target
+  gl.bindTexture(gl.TEXTURE_2D, null);             // unbind texture
+}
+
+// Renders the halftone pattern to the canvas using averaged cell colors from pass1.texture.
+function runPass2() {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);        // render to canvas
+  gl.viewport(0, 0, canvas.width, canvas.height);  // full canvas resolution
+  gl.useProgram(pass2.program);                    // halftone shader
+  gl.activeTexture(gl.TEXTURE0);                   // activate slot 0
+  gl.bindTexture(gl.TEXTURE_2D, pass1.texture);    // put the averaged cell texture in slot 0
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);          // draw fullscreen quad — shader renders halftone dots
+  gl.bindTexture(gl.TEXTURE_2D, null);             // unbind texture
+}
 
 const img = new Image();
 img.onload = () => {
-  const texture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, texture);
-  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-  gl.generateMipmap(gl.TEXTURE_2D);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-  gl.viewport(0, 0, cols, rows);
-  gl.useProgram(passthroughProgram);
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, texture);  // the loaded image, not smallTex
-  const ptLoc = gl.getUniformLocation(passthroughProgram, "uTexture");
-  gl.uniform1i(ptLoc, 0);
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-  // Second pass
-  // Restore default framebuffer which is canvas. Draw operations will now happen on canvas
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  gl.viewport(0, 0, canvas.width, canvas.height);
-  gl.useProgram(program);
-  const cellCountLoc = gl.getUniformLocation(program, "uCellCount");
-  gl.uniform2f(cellCountLoc, cols, rows);
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, smallTex);
-  const htLoc = gl.getUniformLocation(program, "uTexture");
-  gl.uniform1i(htLoc, 0);
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  const srcTex = uploadImage(img);
+  runPass1(srcTex);
+  runPass2();
 };
 img.src = "/images/clockenflap.avif";
