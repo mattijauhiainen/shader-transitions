@@ -130,11 +130,8 @@ function setupPass2() {
       float luma = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722)); // perceptual brightness of the cell
       float radius = sqrt(luma) * uCellSize * 0.5;             // dot radius — sqrt gives perceptually linear growth
       float dist = length(gl_FragCoord.xy - cellCenter);       // distance from this pixel to the cell center
-      if (dist < radius) {
-        fragColor = color;                   // inside the dot — draw with the cell's color
-      } else {
-        fragColor = vec4(0, 0, 0, 1);        // outside the dot — draw black
-      }
+      float alpha = smoothstep(radius + 0.5, radius - 0.5, dist);
+      fragColor = mix(vec4(0, 0, 0, 1), color, alpha);
     }
   `);
 
