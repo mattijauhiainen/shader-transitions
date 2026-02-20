@@ -6,7 +6,8 @@ const gl = canvas.getContext("webgl2")!;
 
 // --- shared ---
 
-const PITCH = 7.0;
+const CELL_SIZE = 5.0;
+const PITCH = 6.0;
 const cols = Math.ceil(canvas.width / PITCH);
 const rows = Math.ceil(canvas.height / PITCH);
 
@@ -59,10 +60,19 @@ function setupPass1() {
   const program = createProgram(vertSrc, `#version 300 es
     precision highp float;
     uniform sampler2D uTexture;
+    uniform vec2 uImageSize;   // original image width and height in pixels
+    uniform vec2 uCanvasSize;  // canvas width and height in pixels
     in vec2 vUV;
     out vec4 fragColor;
     void main() {
-      fragColor = texture(uTexture, vUV); // passthrough — copy input pixel to output
+      vec2 scale = uCanvasSize / uImageSize;       // how much to scale on each axis to fill that axis
+      float coverScale = max(scale.x, scale.y);    // pick the larger — this axis fills exactly, the other overflows
+      vec2 scaledImageSize = uImageSize * coverScale;  // image size after scaling, in pixels
+      vec2 offset = (scaledImageSize - uCanvasSize) * 0.5;  // pixels cropped off each edge
+      vec2 pixelCoord = vUV * uCanvasSize;                      // canvas pixel this fragment corresponds to
+      vec2 imagePixel = pixelCoord + offset;                    // shift into the image's pixel space
+      vec2 imageUV    = imagePixel / scaledImageSize;           // normalise to [0,1] within the scaled image
+      fragColor = texture(uTexture, imageUV); // passthrough — copy input pixel to output
     }
   `);
 
@@ -129,7 +139,7 @@ function setupPass2() {
   `);
 
   gl.useProgram(program);                                                  // activate program so uniform calls target it
-  gl.uniform1f(gl.getUniformLocation(program, "uCellSize"), 6.0);         // max dot diameter in pixels
+  gl.uniform1f(gl.getUniformLocation(program, "uCellSize"), CELL_SIZE);         // max dot diameter in pixels
   gl.uniform1f(gl.getUniformLocation(program, "uPitch"), PITCH);          // cell + gap size in pixels
   gl.uniform2f(gl.getUniformLocation(program, "uCellCount"), cols, rows); // grid dimensions
   gl.uniform1i(gl.getUniformLocation(program, "uTexture"), 0);            // always read from texture slot 0
@@ -165,6 +175,8 @@ function runPass1(srcTex: WebGLTexture) {
   gl.bindFramebuffer(gl.FRAMEBUFFER, pass1.fbo);   // render into pass1.texture instead of the canvas
   gl.viewport(0, 0, cols, rows);                   // one output pixel per cell
   gl.useProgram(pass1.program);                    // passthrough shader — just copies the texture
+  gl.uniform2f(gl.getUniformLocation(pass1.program, "uImageSize"), img.width, img.height);
+  gl.uniform2f(gl.getUniformLocation(pass1.program, "uCanvasSize"), canvas.width, canvas.height);
   gl.activeTexture(gl.TEXTURE0);                   // activate slot 0
   gl.bindTexture(gl.TEXTURE_2D, srcTex);           // put the source image in slot 0
   gl.uniform1i(gl.getUniformLocation(pass1.program, "uTexture"), 0); // tell shader to read from slot 0
