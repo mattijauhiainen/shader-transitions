@@ -24,7 +24,8 @@ try {
 
   const transitions = [
     // (t: number, ox: number, oy: number) => renderer.renderRadial(t, ox, oy),
-    (t: number) => renderer.renderShrink(t),
+    // (t: number) => renderer.renderShrink(t),
+    (t: number) => renderer.renderWipe(t),
   ];
 
   async function runSlideshow(paths: string[]) {
