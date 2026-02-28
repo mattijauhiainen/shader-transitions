@@ -3,8 +3,8 @@ import { sleep } from "./sleep.ts";
 import { animateTo } from "./animateTo.ts";
 import { Renderer } from "./renderer.ts";
 
-const DURATION = 1500;
-const PAUSE = 0;
+const DURATION = 2500;
+const PAUSE = 1000;
 
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 canvas.width = window.innerWidth;
@@ -15,11 +15,23 @@ const gl = canvas.getContext("webgl2")!;
 try {
   const renderer = new Renderer(gl, canvas.width, canvas.height);
 
+  function randomOrigin(): [number, number] {
+    return [
+      canvas.width * (0.25 + Math.random() * 0.5),
+      canvas.height * (0.25 + Math.random() * 0.5),
+    ];
+  }
+
+  const transitions = [
+    // (t: number, ox: number, oy: number) => renderer.renderRadial(t, ox, oy),
+    (t: number) => renderer.renderShrink(t),
+  ];
+
   async function runSlideshow(paths: string[]) {
     const firstImg = await loadImage(paths[0]);
     renderer.prepareNext(firstImg);
     renderer.swap();
-    renderer.renderTransition(0);
+    renderer.renderRadial(0, canvas.width / 2, canvas.height / 2);
 
     for (let i = 0; ; i = (i + 1) % paths.length) {
       const nextImgPromise = loadImage(paths[(i + 1) % paths.length]);
@@ -28,9 +40,9 @@ try {
 
       const nextImg = await nextImgPromise;
       renderer.prepareNext(nextImg);
-      renderer.randomizeOrigin();
 
-      await animateTo(DURATION, t => renderer.renderTransition(t));
+      const [ox, oy] = randomOrigin();
+      await animateTo(DURATION, (t) => transitions[i % transitions.length](t, ox, oy));
 
       renderer.swap();
     }

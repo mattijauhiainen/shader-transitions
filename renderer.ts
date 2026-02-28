@@ -22,15 +22,18 @@ export class Renderer {
     uInputSize: WebGLUniformLocation;
     uIsFirstStep: WebGLUniformLocation;
   };
-  private halftoneRender: {
+  private radialRender: {
     program: WebGLProgram;
     uT: WebGLUniformLocation;
     uOrigin: WebGLUniformLocation;
   };
+  private shrinkRender: {
+    program: WebGLProgram;
+    uT: WebGLUniformLocation;
+  };
   private current: HalftoneFrame;
   private next: HalftoneFrame;
   private buffer: WebGLBuffer;
-
   private canvasWidth: number;
   private canvasHeight: number;
 
@@ -65,12 +68,13 @@ export class Renderer {
 
     this.averageCellColors = this.setupAverageCellColors(vertSrc);
     this.lumaRanges = this.setupLumaRanges(vertSrc);
-    this.halftoneRender = this.setupHalftoneRender(vertSrc);
+    this.radialRender = this.setupRadialRender(vertSrc);
+    this.shrinkRender = this.setupShrinkRender(vertSrc);
 
     this.current = this.createHalftoneFrame();
     this.next = this.createHalftoneFrame();
 
-    const loc = gl.getAttribLocation(this.halftoneRender.program, "aPosition");
+    const loc = gl.getAttribLocation(this.radialRender.program, "aPosition");
     gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
   }
@@ -99,21 +103,15 @@ export class Renderer {
     [this.current, this.next] = [this.next, this.current];
   }
 
-  randomizeOrigin(): void {
+  renderRadial(t: number, originX: number, originY: number): void {
     const gl = this.gl;
-    gl.useProgram(this.halftoneRender.program);
-    gl.uniform2f(
-      this.halftoneRender.uOrigin,
-      this.canvasWidth * (0.25 + Math.random() * 0.5),
-      this.canvasHeight * (0.25 + Math.random() * 0.5)
-    );
-  }
 
-  renderTransition(t: number): void {
-    const gl = this.gl;
+    gl.useProgram(this.radialRender.program);
+    gl.uniform2f(this.radialRender.uOrigin, originX, originY);
+
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, this.canvasWidth, this.canvasHeight);
-    gl.useProgram(this.halftoneRender.program);
+    gl.useProgram(this.radialRender.program);
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.current.cellTex);
@@ -127,7 +125,32 @@ export class Renderer {
     gl.activeTexture(gl.TEXTURE3);
     gl.bindTexture(gl.TEXTURE_2D, this.next.reduceSteps[this.next.reduceSteps.length - 1].texture);
 
-    gl.uniform1f(this.halftoneRender.uT, t);
+    gl.uniform1f(this.radialRender.uT, t);
+
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  renderShrink(t: number): void {
+    const gl = this.gl;
+
+    gl.useProgram(this.shrinkRender.program);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, this.canvasWidth, this.canvasHeight);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.current.cellTex);
+
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.current.reduceSteps[this.current.reduceSteps.length - 1].texture);
+
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.next.cellTex);
+
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, this.next.reduceSteps[this.next.reduceSteps.length - 1].texture);
+
+    gl.uniform1f(this.shrinkRender.uT, t);
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
@@ -268,7 +291,7 @@ export class Renderer {
     };
   }
 
-  private setupHalftoneRender(vertSrc: string) {
+  private setupRadialRender(vertSrc: string) {
     const gl = this.gl;
     const program = this.createProgram(vertSrc, `#version 300 es
     precision highp float;
@@ -290,6 +313,7 @@ export class Renderer {
       vec2 cellCenter = (cellCoord + 0.5) * uPitch;
       vec2 uv = (cellCoord + 0.5) / uCellCount;
       float dist = length(gl_FragCoord.xy - cellCenter);
+
       float distFromOrigin = length(gl_FragCoord.xy - uOrigin);
       vec2 viewport = uCellCount * uPitch;
       float diameter = max(
@@ -331,6 +355,73 @@ export class Renderer {
       program,
       uT: gl.getUniformLocation(program, "uT")!,
       uOrigin: gl.getUniformLocation(program, "uOrigin")!,
+    };
+  }
+
+  private setupShrinkRender(vertSrc: string) {
+    const gl = this.gl;
+    const program = this.createProgram(vertSrc, `#version 300 es
+    precision highp float;
+
+    // Per-cell average colors for current (A) and next (B) frames
+    uniform sampler2D uTextureA;
+    uniform sampler2D uLumaRangeA;   // .r = min luma, .g = max luma
+    uniform sampler2D uTextureB;
+    uniform sampler2D uLumaRangeB;
+
+    uniform float uCellSize;         // dot diameter at full brightness
+    uniform float uPitch;            // cell spacing in pixels
+    uniform vec2 uCellCount;         // grid dimensions (cols, rows)
+    uniform float uT;                // transition progress 0..1
+    in vec2 vUV;
+    out vec4 fragColor;
+
+    void main() {
+      // Grid helpers
+      vec2 cellCoord = floor(gl_FragCoord.xy / uPitch);
+      vec2 cellCenter = (cellCoord + 0.5) * uPitch;
+      vec2 uv = (cellCoord + 0.5) / uCellCount;
+      float dist = length(gl_FragCoord.xy - cellCenter);
+
+      // Current frame (A)
+      vec4 colorA = texture(uTextureA, uv);
+      vec2 rangeA = texture(uLumaRangeA, vec2(0.5)).rg;
+      float normA = (dot(colorA.rgb, vec3(${LUMA[0]}, ${LUMA[1]}, ${LUMA[2]})) - rangeA.r) / (rangeA.g - rangeA.r);
+
+      // Next frame (B)
+      vec4 colorB = texture(uTextureB, uv);
+      vec2 rangeB = texture(uLumaRangeB, vec2(0.5)).rg;
+      float normB = (dot(colorB.rgb, vec3(${LUMA[0]}, ${LUMA[1]}, ${LUMA[2]})) - rangeB.r) / (rangeB.g - rangeB.r);
+
+      // Natural radii for each frame
+      float rA = sqrt(normA) * uCellSize * 0.5;
+      float rB = sqrt(normB) * uCellSize * 0.5;
+
+      // Interpolate between radii with overshoot
+      float t = uT;
+      float curve = 1.0 + 0.8 * sin(t * 3.14159);  // 1.0 -> 1.8 -> 1.0
+      float radius = mix(rA, rB, t) * curve;
+
+      vec3 blendedColor = mix(colorA.rgb, colorB.rgb, t);
+      float alpha = smoothstep(radius + 0.5, radius - 0.5, dist);
+
+      fragColor = mix(vec4(0.0, 0.0, 0.0, 1.0), vec4(blendedColor, 1.0), alpha);
+    }
+    `);
+
+    gl.useProgram(program);
+    gl.uniform1f(gl.getUniformLocation(program, "uCellSize"), CELL_SIZE);
+    gl.uniform1f(gl.getUniformLocation(program, "uPitch"), PITCH);
+    gl.uniform2f(gl.getUniformLocation(program, "uCellCount"), this.cols, this.rows);
+    gl.uniform1i(gl.getUniformLocation(program, "uTextureA"), 0);
+    gl.uniform1i(gl.getUniformLocation(program, "uLumaRangeA"), 1);
+    gl.uniform1i(gl.getUniformLocation(program, "uTextureB"), 2);
+    gl.uniform1i(gl.getUniformLocation(program, "uLumaRangeB"), 3);
+    gl.useProgram(null);
+
+    return {
+      program,
+      uT: gl.getUniformLocation(program, "uT")!,
     };
   }
 
