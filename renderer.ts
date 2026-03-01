@@ -2,11 +2,16 @@ import { LUMA } from "./luma.ts";
 
 const CELL_SIZE = 5.0;
 const PITCH = 6.0;
+const WALK_WINDOW = 0.10;
 
 interface HalftoneFrame {
   cellTex: WebGLTexture;
   cellFbo: WebGLFramebuffer;
   reduceSteps: { texture: WebGLTexture; fbo: WebGLFramebuffer; w: number; h: number }[];
+}
+
+export interface Transition {
+  prepareRender(): (t: number) => void;
 }
 
 export class Renderer {
@@ -34,6 +39,12 @@ export class Renderer {
   private wipeRender: {
     program: WebGLProgram;
     uT: WebGLUniformLocation;
+  };
+  private walkRender: {
+    program: WebGLProgram;
+    uT: WebGLUniformLocation;
+    uWindow: WebGLUniformLocation;
+    visitMapTex: WebGLTexture;
   };
   private current: HalftoneFrame;
   private next: HalftoneFrame;
@@ -75,6 +86,7 @@ export class Renderer {
     this.radialRender = this.setupRadialRender(vertSrc);
     this.shrinkRender = this.setupShrinkRender(vertSrc);
     this.wipeRender = this.setupWipeRender(vertSrc);
+    this.walkRender = this.setupWalkRender(vertSrc);
 
     this.current = this.createHalftoneFrame();
     this.next = this.createHalftoneFrame();
@@ -108,7 +120,27 @@ export class Renderer {
     [this.current, this.next] = [this.next, this.current];
   }
 
-  renderRadial(t: number, originX: number, originY: number): void {
+  get transitions(): Transition[] {
+    return [
+      // {
+      //   prepareRender: () => {
+      //     const ox = this.canvasWidth * (0.25 + Math.random() * 0.5);
+      //     const oy = this.canvasHeight * (0.25 + Math.random() * 0.5);
+      //     return (t: number) => this.renderRadial(t, ox, oy);
+      //   },
+      // },
+      // { prepareRender: () => (t: number) => this.renderShrink(t) },
+      // { prepareRender: () => (t: number) => this.renderWipe(t) },
+      {
+        prepareRender: () => {
+          this.prepareWalkTransition();
+          return (t: number) => this.renderWalk(t);
+        },
+      },
+    ];
+  }
+
+  private renderRadial(t: number, originX: number, originY: number): void {
     const gl = this.gl;
 
     gl.useProgram(this.radialRender.program);
@@ -135,7 +167,7 @@ export class Renderer {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
-  renderShrink(t: number): void {
+  private renderShrink(t: number): void {
     const gl = this.gl;
 
     gl.useProgram(this.shrinkRender.program);
@@ -160,7 +192,7 @@ export class Renderer {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
-  renderWipe(t: number): void {
+  private renderWipe(t: number): void {
     const gl = this.gl;
 
     gl.useProgram(this.wipeRender.program);
@@ -183,6 +215,127 @@ export class Renderer {
     gl.uniform1f(this.wipeRender.uT, t);
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  private prepareWalkTransition(): void {
+    const gl = this.gl;
+    const visitTime = this.computeWalkMap();
+    gl.bindTexture(gl.TEXTURE_2D, this.walkRender.visitMapTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, this.cols, this.rows, 0, gl.RED, gl.FLOAT, visitTime);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+
+  private renderWalk(t: number): void {
+    const gl = this.gl;
+
+    gl.useProgram(this.walkRender.program);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, this.canvasWidth, this.canvasHeight);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.current.cellTex);
+
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.current.reduceSteps[this.current.reduceSteps.length - 1].texture);
+
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.next.cellTex);
+
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, this.next.reduceSteps[this.next.reduceSteps.length - 1].texture);
+
+    gl.activeTexture(gl.TEXTURE4);
+    gl.bindTexture(gl.TEXTURE_2D, this.walkRender.visitMapTex);
+
+    gl.uniform1f(this.walkRender.uT, t);
+    gl.uniform1f(this.walkRender.uWindow, WALK_WINDOW);
+
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  // Compute a "visit time" for each pixel in our grid. Visit time is between
+  // [0, 1] and the renderer will use the times to decide when cells need to
+  // render when transitioning t between [0, 1].
+  private computeWalkMap(): Float32Array {
+    const totalCells = this.cols * this.rows;
+    const visitTime = new Float32Array(totalCells).fill(-1);
+
+    const NUM_WALKERS = 24;
+    const walkerStacks: [number, number][][] = [];
+
+    let step = 0;
+    let visitedCount = 0;
+
+    // Get starting positions for the walkers, divide the screen to NUM_WALKERS
+    // rectangles and start each walker in a random position instead a rectangle.
+    const gridCols = Math.round(Math.sqrt(NUM_WALKERS * this.cols / this.rows));
+    const gridRows = Math.ceil(NUM_WALKERS / gridCols);
+    for (let i = 0; i < NUM_WALKERS; i++) {
+      const gx = i % gridCols;
+      const gy = Math.floor(i / gridCols);
+      const x0 = Math.floor(gx * this.cols / gridCols);
+      const x1 = Math.floor((gx + 1) * this.cols / gridCols);
+      const y0 = Math.floor(gy * this.rows / gridRows);
+      const y1 = Math.floor((gy + 1) * this.rows / gridRows);
+      const x = x0 + Math.floor(Math.random() * (x1 - x0));
+      const y = y0 + Math.floor(Math.random() * (y1 - y0));
+      const idx = y * this.cols + x;
+      if (visitTime[idx] < 0) {
+        visitTime[idx] = 0;
+        visitedCount++;
+      }
+      walkerStacks.push([[x, y]]);
+    }
+
+    const directions: [number, number][] = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+
+    while (visitedCount < totalCells) {
+      step++;
+      for (const stack of walkerStacks) {
+        while (stack.length > 0) {
+          const [cx, cy] = stack[stack.length - 1];
+          const neighbors: [number, number][] = [];
+          // Find unvisited neighbors
+          for (const [dx, dy] of directions) {
+            const nx = cx + dx, ny = cy + dy;
+            if (nx >= 0 && nx < this.cols && ny >= 0 && ny < this.rows && visitTime[ny * this.cols + nx] < 0) {
+              neighbors.push([nx, ny]);
+            }
+          }
+          // Backtrack to previous cell if we are in deadend
+          if (neighbors.length === 0) {
+            stack.pop();
+            continue;
+          }
+          const pick = neighbors[Math.floor(Math.random() * neighbors.length)];
+          visitTime[pick[1] * this.cols + pick[0]] = step;
+          visitedCount++;
+          stack.push(pick);
+          break;
+        }
+        // Respawn exhausted walker at a random unvisited cell
+        if (stack.length === 0 && visitedCount < totalCells) {
+          let idx: number;
+          do {
+            idx = Math.floor(Math.random() * totalCells);
+          } while (visitTime[idx] >= 0);
+          const x = idx % this.cols;
+          const y = Math.floor(idx / this.cols);
+          visitTime[idx] = step;
+          visitedCount++;
+          stack.push([x, y]);
+        }
+      }
+    }
+
+    // Normalize the steps into visit times between [0, 1]
+    const maxStep = step;
+    for (let i = 0; i < totalCells; i++) {
+      visitTime[i] = Math.max(0, visitTime[i]) / maxStep * (1 - WALK_WINDOW);
+    }
+
+    return visitTime;
   }
 
   private createTextureAndFBO(w: number, h: number): { texture: WebGLTexture; fbo: WebGLFramebuffer } {
@@ -517,6 +670,81 @@ export class Renderer {
     return {
       program,
       uT: gl.getUniformLocation(program, "uT")!,
+    };
+  }
+
+  private setupWalkRender(vertSrc: string) {
+    const gl = this.gl;
+    const program = this.createProgram(vertSrc, `#version 300 es
+    precision highp float;
+    uniform sampler2D uTextureA;
+    uniform sampler2D uLumaRangeA;
+    uniform sampler2D uTextureB;
+    uniform sampler2D uLumaRangeB;
+    uniform sampler2D uVisitMap;
+    uniform float uCellSize;
+    uniform float uPitch;
+    uniform vec2 uCellCount;
+    uniform float uT;
+    uniform float uWindow;
+
+    in vec2 vUV;
+    out vec4 fragColor;
+
+    void main() {
+      vec2 cellCoord = floor(gl_FragCoord.xy / uPitch);
+      vec2 cellCenter = (cellCoord + 0.5) * uPitch;
+      vec2 uv = (cellCoord + 0.5) / uCellCount;
+      float dist = length(gl_FragCoord.xy - cellCenter);
+
+      float visitTime = texture(uVisitMap, uv).r;
+      float cellT = smoothstep(visitTime, visitTime + uWindow, uT);
+
+      vec4 colorA = texture(uTextureA, uv);
+      vec2 rangeA = texture(uLumaRangeA, vec2(0.5)).rg;
+      float normA = (dot(colorA.rgb, vec3(${LUMA[0]}, ${LUMA[1]}, ${LUMA[2]})) - rangeA.r) / (rangeA.g - rangeA.r);
+
+      float scaleA = 1.0 - cellT;
+      float radiusA = sqrt(normA) * uCellSize * 0.5 * scaleA;
+      float alphaA = smoothstep(radiusA + 0.5, radiusA - 0.5, dist);
+
+      vec4 colorB = texture(uTextureB, uv);
+      vec2 rangeB = texture(uLumaRangeB, vec2(0.5)).rg;
+      float normB = (dot(colorB.rgb, vec3(${LUMA[0]}, ${LUMA[1]}, ${LUMA[2]})) - rangeB.r) / (rangeB.g - rangeB.r);
+
+      float scaleB = cellT;
+      float radiusB = sqrt(normB) * uCellSize * 0.5 * scaleB;
+      float alphaB = smoothstep(radiusB + 0.5, radiusB - 0.5, dist);
+
+      vec4 bg = vec4(0.0, 0.0, 0.0, 1.0);
+      fragColor = mix(mix(bg, vec4(colorA.rgb, 1.0), alphaA), vec4(colorB.rgb, 1.0), alphaB);
+    }
+    `);
+
+    gl.useProgram(program);
+    gl.uniform1f(gl.getUniformLocation(program, "uCellSize"), CELL_SIZE);
+    gl.uniform1f(gl.getUniformLocation(program, "uPitch"), PITCH);
+    gl.uniform2f(gl.getUniformLocation(program, "uCellCount"), this.cols, this.rows);
+    gl.uniform1i(gl.getUniformLocation(program, "uTextureA"), 0);
+    gl.uniform1i(gl.getUniformLocation(program, "uLumaRangeA"), 1);
+    gl.uniform1i(gl.getUniformLocation(program, "uTextureB"), 2);
+    gl.uniform1i(gl.getUniformLocation(program, "uLumaRangeB"), 3);
+    gl.uniform1i(gl.getUniformLocation(program, "uVisitMap"), 4);
+    gl.useProgram(null);
+
+    const visitMapTex = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_2D, visitMapTex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+
+    return {
+      program,
+      uT: gl.getUniformLocation(program, "uT")!,
+      uWindow: gl.getUniformLocation(program, "uWindow")!,
+      visitMapTex,
     };
   }
 
