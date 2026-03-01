@@ -17,10 +17,15 @@ try {
   const transitions = renderer.transitions;
 
   async function runSlideshow(paths: string[]) {
+    shuffle(paths);
+
     const firstImg = await loadImage(paths[0]);
     renderer.prepareNext(firstImg);
     renderer.swap();
     transitions[0].prepareRender()(0);
+
+    let ti = 0;
+    const shuffledTransitions = shuffle([...transitions]);
 
     for (let i = 0; ; i = (i + 1) % paths.length) {
       const nextImgPromise = loadImage(paths[(i + 1) % paths.length]);
@@ -30,7 +35,8 @@ try {
       const nextImg = await nextImgPromise;
       renderer.prepareNext(nextImg);
 
-      const render = transitions[i % transitions.length].prepareRender();
+      const render = shuffledTransitions[ti].prepareRender();
+      ti = (ti + 1) % shuffledTransitions.length;
       await animateTo(DURATION, render);
 
       renderer.swap();
@@ -43,4 +49,12 @@ try {
   document.body.style.cssText = "color:red;padding:2em;font-family:monospace;white-space:pre-wrap";
   document.body.textContent = String(e);
   throw e;
+}
+
+function shuffle<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
