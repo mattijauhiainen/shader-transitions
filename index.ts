@@ -35,9 +35,10 @@ try {
       const nextImg = await nextImgPromise;
       renderer.prepareNext(nextImg);
 
-      const render = shuffledTransitions[ti].prepareRender();
+      const transition = shuffledTransitions[ti];
+      const render = transition.prepareRender();
       ti = (ti + 1) % shuffledTransitions.length;
-      await animateTo(DURATION, render);
+      await animateTo(DURATION, render, transition.easing);
 
       renderer.swap();
     }

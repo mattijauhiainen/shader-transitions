@@ -4,9 +4,11 @@ import { CELL_SIZE, PITCH, type RendererContext, type Transition } from "../rend
 const WALK_WINDOW = 0.10;
 const NUM_WALKERS = 24;
 
-export function createWalkTransition(ctx: RendererContext, vertSrc: string): Transition {
+import { fullscreenQuadVert } from "../fullscreenQuadVert.ts";
+
+export function createWalkTransition(ctx: RendererContext): Transition {
   const gl = ctx.gl;
-  const program = ctx.createProgram(vertSrc, `#version 300 es
+  const program = ctx.createProgram(fullscreenQuadVert, `#version 300 es
   precision highp float;
   uniform sampler2D uTextureA;
   uniform sampler2D uLumaRangeA;

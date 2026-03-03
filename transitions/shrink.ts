@@ -1,9 +1,10 @@
 import { LUMA } from "../luma.ts";
 import { CELL_SIZE, PITCH, type RendererContext, type Transition } from "../renderer.ts";
+import { fullscreenQuadVert } from "../fullscreenQuadVert.ts";
 
-export function createShrinkTransition(ctx: RendererContext, vertSrc: string): Transition {
+export function createShrinkTransition(ctx: RendererContext): Transition {
   const gl = ctx.gl;
-  const program = ctx.createProgram(vertSrc, `#version 300 es
+  const program = ctx.createProgram(fullscreenQuadVert, `#version 300 es
   precision highp float;
 
   // Per-cell average colors for current (A) and next (B) frames

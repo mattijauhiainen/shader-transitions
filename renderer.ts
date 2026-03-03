@@ -3,6 +3,8 @@ import { createRadialTransition } from "./transitions/radial.ts";
 import { createShrinkTransition } from "./transitions/shrink.ts";
 import { createWipeTransition } from "./transitions/wipe.ts";
 import { createWalkTransition } from "./transitions/walk.ts";
+import { createExplodeTransition } from "./transitions/explode.ts";
+import { fullscreenQuadVert } from "./fullscreenQuadVert.ts";
 
 export const CELL_SIZE = 5.0;
 export const PITCH = 6.0;
@@ -26,6 +28,7 @@ export interface RendererContext {
 
 export interface Transition {
   prepareRender(): (t: number) => void;
+  easing?: (t: number) => number;
 }
 
 export class Renderer implements RendererContext {
@@ -61,14 +64,6 @@ export class Renderer implements RendererContext {
     this.cols = Math.ceil(width / PITCH);
     this.rows = Math.ceil(height / PITCH);
 
-    const fullscreenQuadVert = `#version 300 es
-      in vec2 aPosition;
-      out vec2 vUV;
-      void main() {
-        vUV = aPosition * 0.5 + 0.5;
-        gl_Position = vec4(aPosition, 0.0, 1.0);
-      }
-    `;
 
     const positions = new Float32Array([
       -1, -1,
@@ -87,10 +82,11 @@ export class Renderer implements RendererContext {
     this._next = this.createHalftoneFrame();
 
     this._transitions = [
-      createRadialTransition(this, fullscreenQuadVert),
-      createShrinkTransition(this, fullscreenQuadVert),
-      createWipeTransition(this, fullscreenQuadVert),
-      createWalkTransition(this, fullscreenQuadVert),
+      createRadialTransition(this),
+      createShrinkTransition(this),
+      createWipeTransition(this),
+      createWalkTransition(this),
+      createExplodeTransition(this),
     ];
 
     gl.enableVertexAttribArray(0);
