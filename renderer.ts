@@ -1,10 +1,11 @@
+import { fullscreenQuadVert } from "./fullscreenQuadVert.ts";
 import { LUMA } from "./luma.ts";
+import { createExplodeTransition } from "./transitions/explode.ts";
+import { createPageflipTransition } from "./transitions/pageflip.ts";
 import { createRadialTransition } from "./transitions/radial.ts";
 import { createShrinkTransition } from "./transitions/shrink.ts";
-import { createWipeTransition } from "./transitions/wipe.ts";
 import { createWalkTransition } from "./transitions/walk.ts";
-import { createExplodeTransition } from "./transitions/explode.ts";
-import { fullscreenQuadVert } from "./fullscreenQuadVert.ts";
+import { createWipeTransition } from "./transitions/wipe.ts";
 
 export const CELL_SIZE = 5.0;
 export const PITCH = 6.0;
@@ -67,9 +68,9 @@ export class Renderer implements RendererContext {
 
     const positions = new Float32Array([
       -1, -1,
-       1, -1,
-      -1,  1,
-       1,  1,
+      1, -1,
+      -1, 1,
+      1, 1,
     ]);
     this.buffer = gl.createBuffer()!;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
@@ -87,6 +88,7 @@ export class Renderer implements RendererContext {
       createWipeTransition(this),
       createWalkTransition(this),
       createExplodeTransition(this),
+      createPageflipTransition(this),
     ];
 
     gl.enableVertexAttribArray(0);
