@@ -66,7 +66,8 @@ export function createRadialTransition(ctx: RendererContext): Transition {
   const uOrigin = gl.getUniformLocation(program, "uOrigin")!;
 
   return {
-    prepareRender() {
+    durationMs: 2500,
+    prepareRender(_durationMs: number) {
       const ox = ctx.canvasWidth * (0.25 + Math.random() * 0.5);
       const oy = ctx.canvasHeight * (0.25 + Math.random() * 0.5);
       return (t: number) => {

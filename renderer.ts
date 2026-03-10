@@ -1,5 +1,6 @@
 import { fullscreenQuadVert } from "./fullscreenQuadVert.ts";
 import { LUMA } from "./luma.ts";
+import { createCollapseTransition } from "./transitions/collapse.ts";
 import { createExplodeTransition } from "./transitions/explode.ts";
 import { createPageflipTransition } from "./transitions/pageflip.ts";
 import { createRadialTransition } from "./transitions/radial.ts";
@@ -28,8 +29,10 @@ export interface RendererContext {
 }
 
 export interface Transition {
-  prepareRender(): (t: number) => void;
+  prepareRender(durationMs: number): (t: number) => void;
   easing?: (t: number) => number;
+  durationMs: number;
+  dispose?: () => void;
 }
 
 export class Renderer implements RendererContext {
@@ -89,6 +92,7 @@ export class Renderer implements RendererContext {
       createWalkTransition(this),
       createExplodeTransition(this),
       createPageflipTransition(this),
+      createCollapseTransition(this),
     ];
 
     gl.enableVertexAttribArray(0);

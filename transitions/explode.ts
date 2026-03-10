@@ -113,8 +113,9 @@ export function createExplodeTransition(ctx: RendererContext): Transition {
   const totalInstances = ctx.cols * ctx.rows;
 
   return {
+    durationMs: 2500,
     easing: (t: number) => t,
-    prepareRender: () => (t: number) => {
+    prepareRender: (_durationMs: number) => (t: number) => {
       gl.useProgram(program);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.viewport(0, 0, ctx.canvasWidth, ctx.canvasHeight);

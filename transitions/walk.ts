@@ -77,7 +77,8 @@ export function createWalkTransition(ctx: RendererContext): Transition {
   gl.bindTexture(gl.TEXTURE_2D, null);
 
   return {
-    prepareRender() {
+    durationMs: 2500,
+    prepareRender(_durationMs: number) {
       const visitTime = computeWalkMap(ctx.cols, ctx.rows);
       gl.bindTexture(gl.TEXTURE_2D, visitMapTex);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, ctx.cols, ctx.rows, 0, gl.RED, gl.FLOAT, visitTime);

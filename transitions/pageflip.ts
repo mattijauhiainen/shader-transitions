@@ -128,8 +128,9 @@ export function createPageflipTransition(ctx: RendererContext): Transition {
   const totalInstances = ctx.cols * ctx.rows;
 
   return {
+    durationMs: 2500,
     easing: easeIn,
-    prepareRender: () => (t: number) => {
+    prepareRender: (_durationMs: number) => (t: number) => {
       gl.useProgram(program);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.viewport(0, 0, ctx.canvasWidth, ctx.canvasHeight);

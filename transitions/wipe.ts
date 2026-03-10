@@ -64,7 +64,8 @@ export function createWipeTransition(ctx: RendererContext): Transition {
   const uT = gl.getUniformLocation(program, "uT")!;
 
   return {
-    prepareRender: () => (t: number) => {
+    durationMs: 2500,
+    prepareRender: (_durationMs: number) => (t: number) => {
       gl.useProgram(program);
 
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);

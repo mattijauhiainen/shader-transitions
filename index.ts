@@ -1,10 +1,9 @@
-import { loadImage } from "./loadImage.ts";
-import { sleep } from "./sleep.ts";
 import { animateTo } from "./animateTo.ts";
+import { loadImage } from "./loadImage.ts";
 import { Renderer } from "./renderer.ts";
+import { sleep } from "./sleep.ts";
 
-const DURATION = 2500;
-const PAUSE = 1000;
+const PAUSE = 500;
 
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 canvas.width = window.innerWidth;
@@ -22,7 +21,7 @@ try {
     const firstImg = await loadImage(paths[0]);
     renderer.prepareNext(firstImg);
     renderer.swap();
-    transitions[0].prepareRender()(0);
+    transitions[0].prepareRender(transitions[0].durationMs)(0);
 
     let ti = 0;
     const shuffledTransitions = shuffle([...transitions]);
@@ -36,9 +35,9 @@ try {
       renderer.prepareNext(nextImg);
 
       const transition = shuffledTransitions[ti];
-      const render = transition.prepareRender();
+      const render = transition.prepareRender(transition.durationMs);
       ti = (ti + 1) % shuffledTransitions.length;
-      await animateTo(DURATION, render, transition.easing);
+      await animateTo(transition.durationMs, render, transition.easing);
 
       renderer.swap();
     }
