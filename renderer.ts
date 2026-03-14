@@ -6,6 +6,7 @@ import { createPageflipTransition } from "./transitions/pageflip.ts";
 import { createRadialTransition } from "./transitions/radial.ts";
 import { createShrinkTransition } from "./transitions/shrink.ts";
 import { createWalkTransition } from "./transitions/walk.ts";
+import { createRainTransition } from "./transitions/rain.ts";
 import { createWipeTransition } from "./transitions/wipe.ts";
 
 export const CELL_SIZE = 5.0;
@@ -93,6 +94,7 @@ export class Renderer implements RendererContext {
       createExplodeTransition(this),
       createPageflipTransition(this),
       createCollapseTransition(this),
+      createRainTransition(this),
     ];
 
     gl.enableVertexAttribArray(0);

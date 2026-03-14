@@ -177,9 +177,7 @@ export function createCollapseTransition(ctx: RendererContext): Transition {
 
   const totalInstances = overscanCols * overscanRows;
   const visibleInstances = ctx.cols * ctx.rows;
-  console.time('collapse:generateVisitOrder');
   const visitOrder = generateVisitOrder(overscanCols, overscanRows);
-  console.timeEnd('collapse:generateVisitOrder');
 
   // Allocate visit map texture (data uploaded in prepareRender)
   const visitMapTex = gl.createTexture()!;
