@@ -1,9 +1,17 @@
 import { readdirSync } from "fs";
 
+// Generate images.json for dev
+const images = readdirSync("./images")
+  .filter((f) => f.endsWith(".avif"))
+  .sort()
+  .map((f) => `/images/${f}`);
+await Bun.write("./images.json", JSON.stringify(images));
+
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html",
   ".css": "text/css",
   ".js": "application/javascript",
+  ".json": "application/json",
   ".avif": "image/avif",
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -20,16 +28,6 @@ const server = Bun.serve({
     if (path === "/" || path === "/index.html") {
       return new Response(Bun.file("index.html"), {
         headers: { "Content-Type": "text/html" },
-      });
-    }
-
-    if (path === "/images") {
-      const files = readdirSync("./images")
-        .filter((f) => f.endsWith(".avif"))
-        .sort()
-        .map((f) => `/images/${f}`);
-      return new Response(JSON.stringify(files), {
-        headers: { "Content-Type": "application/json" },
       });
     }
 

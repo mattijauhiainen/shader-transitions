@@ -4,6 +4,8 @@ node_modules
 # output
 out
 dist
+images.json
+.netlify
 *.tgz
 
 # code coverage

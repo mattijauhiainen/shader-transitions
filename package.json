@@ -4,7 +4,9 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun --watch server.ts"
+    "dev": "bun --watch server.ts",
+    "build": "bun build.ts",
+    "deploy": "bun build.ts && netlify deploy --prod --dir=dist"
   },
   "devDependencies": {
     "@types/bun": "latest"
