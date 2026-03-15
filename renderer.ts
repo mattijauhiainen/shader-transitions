@@ -4,9 +4,9 @@ import { createCollapseTransition } from "./transitions/collapse.ts";
 import { createExplodeTransition } from "./transitions/explode.ts";
 import { createPageflipTransition } from "./transitions/pageflip.ts";
 import { createRadialTransition } from "./transitions/radial.ts";
+import { createRainTransition } from "./transitions/rain.ts";
 import { createShrinkTransition } from "./transitions/shrink.ts";
 import { createWalkTransition } from "./transitions/walk.ts";
-import { createRainTransition } from "./transitions/rain.ts";
 import { createWipeTransition } from "./transitions/wipe.ts";
 
 export const CELL_SIZE = 5.0;
@@ -223,6 +223,7 @@ export class Renderer implements RendererContext {
     const gl = this.gl;
     const program = this.createProgram(vertSrc, `#version 300 es
       precision highp float;
+      #define LUMA vec3(${LUMA[0]}, ${LUMA[1]}, ${LUMA[2]})
       uniform sampler2D uTexture;
       uniform vec2 uInputSize;
       uniform bool uIsFirstStep;
@@ -239,11 +240,10 @@ export class Renderer implements RendererContext {
 
         float minL, maxL;
         if (uIsFirstStep) {
-          vec3 lw = vec3(${LUMA[0]}, ${LUMA[1]}, ${LUMA[2]});
-          float la = dot(a.rgb, lw);
-          float lb = dot(b.rgb, lw);
-          float lc = dot(c.rgb, lw);
-          float ld = dot(d.rgb, lw);
+          float la = dot(a.rgb, LUMA);
+          float lb = dot(b.rgb, LUMA);
+          float lc = dot(c.rgb, LUMA);
+          float ld = dot(d.rgb, LUMA);
           minL = min(min(la, lb), min(lc, ld));
           maxL = max(max(la, lb), max(lc, ld));
         } else {

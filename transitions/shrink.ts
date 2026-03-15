@@ -13,33 +13,35 @@ export function createShrinkTransition(ctx: RendererContext): Transition {
   uniform sampler2D uTextureB;
   uniform sampler2D uLumaRangeB;
 
-  uniform float uCellSize;         // dot diameter at full brightness
-  uniform float uPitch;            // cell spacing in pixels
   uniform vec2 uCellCount;         // grid dimensions (cols, rows)
+
+  #define CELL_SIZE ${CELL_SIZE.toFixed(1)}
+  #define PITCH ${PITCH.toFixed(1)}
+  #define LUMA vec3(${LUMA[0]}, ${LUMA[1]}, ${LUMA[2]})
   uniform float uT;                // transition progress 0..1
   in vec2 vUV;
   out vec4 fragColor;
 
   void main() {
     // Grid helpers
-    vec2 cellCoord = floor(gl_FragCoord.xy / uPitch);
-    vec2 cellCenter = (cellCoord + 0.5) * uPitch;
+    vec2 cellCoord = floor(gl_FragCoord.xy / PITCH);
+    vec2 cellCenter = (cellCoord + 0.5) * PITCH;
     vec2 uv = (cellCoord + 0.5) / uCellCount;
     float dist = length(gl_FragCoord.xy - cellCenter);
 
     // Current frame (A)
     vec4 colorA = texture(uTextureA, uv);
     vec2 rangeA = texture(uLumaRangeA, vec2(0.5)).rg;
-    float normA = (dot(colorA.rgb, vec3(${LUMA[0]}, ${LUMA[1]}, ${LUMA[2]})) - rangeA.r) / (rangeA.g - rangeA.r);
+    float normA = (dot(colorA.rgb, LUMA) - rangeA.r) / (rangeA.g - rangeA.r);
 
     // Next frame (B)
     vec4 colorB = texture(uTextureB, uv);
     vec2 rangeB = texture(uLumaRangeB, vec2(0.5)).rg;
-    float normB = (dot(colorB.rgb, vec3(${LUMA[0]}, ${LUMA[1]}, ${LUMA[2]})) - rangeB.r) / (rangeB.g - rangeB.r);
+    float normB = (dot(colorB.rgb, LUMA) - rangeB.r) / (rangeB.g - rangeB.r);
 
     // Natural radii for each frame
-    float rA = sqrt(normA) * uCellSize * 0.5;
-    float rB = sqrt(normB) * uCellSize * 0.5;
+    float rA = sqrt(normA) * CELL_SIZE * 0.5;
+    float rB = sqrt(normB) * CELL_SIZE * 0.5;
 
     // Interpolate between radii with overshoot
     float t = uT;
@@ -54,8 +56,6 @@ export function createShrinkTransition(ctx: RendererContext): Transition {
   `);
 
   gl.useProgram(program);
-  gl.uniform1f(gl.getUniformLocation(program, "uCellSize"), CELL_SIZE);
-  gl.uniform1f(gl.getUniformLocation(program, "uPitch"), PITCH);
   gl.uniform2f(gl.getUniformLocation(program, "uCellCount"), ctx.cols, ctx.rows);
   gl.uniform1i(gl.getUniformLocation(program, "uTextureA"), 0);
   gl.uniform1i(gl.getUniformLocation(program, "uLumaRangeA"), 1);

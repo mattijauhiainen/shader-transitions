@@ -186,6 +186,7 @@ export function createRainTransition(ctx: RendererContext): Transition {
 
     #define CELL_SIZE ${CELL_SIZE.toFixed(1)}
     #define PITCH ${PITCH.toFixed(1)}
+    #define LUMA vec3(${LUMA[0]}, ${LUMA[1]}, ${LUMA[2]})
     #define FALL_WINDOW ${FALL_WINDOW}
     #define SPLASH_WINDOW (FALL_WINDOW * 1.5)
 
@@ -198,7 +199,7 @@ export function createRainTransition(ctx: RendererContext): Transition {
       vec4 color = textureLod(uCellColors, colorUv, 0.0);
       vec2 lumaRange = textureLod(uLumaRange, vec2(0.5), 0.0).rg;
       float lumaNorm = clamp(
-        (dot(color.rgb, vec3(${LUMA[0]}, ${LUMA[1]}, ${LUMA[2]})) - lumaRange.r) / (lumaRange.g - lumaRange.r),
+        (dot(color.rgb, LUMA) - lumaRange.r) / (lumaRange.g - lumaRange.r),
         0.0,
         1.0
       );

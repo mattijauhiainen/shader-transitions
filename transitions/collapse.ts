@@ -76,9 +76,11 @@ export function createCollapseTransition(ctx: RendererContext): Transition {
 
   uniform sampler2D uCellColors;
   uniform sampler2D uLumaRange;
-  uniform float uCellSize;
-  uniform float uPitch;
   uniform vec2 uOverscanCount;
+
+  #define CELL_SIZE ${CELL_SIZE.toFixed(1)}
+  #define PITCH ${PITCH.toFixed(1)}
+  #define LUMA vec3(${LUMA[0]}, ${LUMA[1]}, ${LUMA[2]})
   uniform vec2 uMargin;
   uniform vec2 uCellCount;
   uniform vec2 uViewport;
@@ -109,11 +111,11 @@ export function createCollapseTransition(ctx: RendererContext): Transition {
     vec4 color = textureLod(uCellColors, colorUV, 0.0);
     vec2 range = textureLod(uLumaRange, vec2(0.5), 0.0).rg;
     float normalizedLuma = clamp(
-      (dot(color.rgb, vec3(${LUMA[0]}, ${LUMA[1]}, ${LUMA[2]})) - range.r) / (range.g - range.r),
+      (dot(color.rgb, LUMA) - range.r) / (range.g - range.r),
       0.0, 1.0);
-    float radius = sqrt(normalizedLuma) * uCellSize * 0.5;
+    float radius = sqrt(normalizedLuma) * CELL_SIZE * 0.5;
 
-    vec2 cellCenter = (visibleCoord + 0.5) * uPitch;
+    vec2 cellCenter = (visibleCoord + 0.5) * PITCH;
 
     // Sample visit map in overscan space
     vec2 visitUV = (cellCoord + 0.5) / uOverscanCount;
@@ -132,14 +134,14 @@ export function createCollapseTransition(ctx: RendererContext): Transition {
     // Position the quad vertex around the dot center. The quad is scaled down
     // by perspectiveScale to match the shrunk dot, so the GPU rasterizes fewer
     // fragments for deeply fallen dots.
-    vec2 pos = perspectivePos + aPosition * 0.5 * uPitch * perspectiveScale;
+    vec2 pos = perspectivePos + aPosition * 0.5 * PITCH * perspectiveScale;
 
     gl_Position = vec4(pos / uViewport * 2.0 - 1.0, 0.0, 1.0);
 
     vColor = color;
     vRadius = r;
     vOpacity = uOpacity;
-    vPixelOffset = aPosition * 0.5 * uPitch * perspectiveScale;
+    vPixelOffset = aPosition * 0.5 * PITCH * perspectiveScale;
   }
   `, `#version 300 es
   precision highp float;
@@ -161,8 +163,6 @@ export function createCollapseTransition(ctx: RendererContext): Transition {
 
   // Cache all uniform locations at setup time
   gl.useProgram(program);
-  gl.uniform1f(gl.getUniformLocation(program, "uCellSize"), CELL_SIZE);
-  gl.uniform1f(gl.getUniformLocation(program, "uPitch"), PITCH);
   gl.uniform2f(gl.getUniformLocation(program, "uCellCount"), ctx.cols, ctx.rows);
   gl.uniform2f(gl.getUniformLocation(program, "uViewport"), ctx.canvasWidth, ctx.canvasHeight);
   gl.uniform1i(gl.getUniformLocation(program, "uCellColors"), 0);

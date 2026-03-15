@@ -10,9 +10,11 @@ export function createPageflipTransition(ctx: RendererContext): Transition {
 
   uniform sampler2D uCellColors;
   uniform sampler2D uLumaRange;
-  uniform float uCellSize;
-  uniform float uPitch;
   uniform vec2 uCellCount;
+
+  #define CELL_SIZE ${CELL_SIZE.toFixed(1)}
+  #define PITCH ${PITCH.toFixed(1)}
+  #define LUMA vec3(${LUMA[0]}, ${LUMA[1]}, ${LUMA[2]})
   uniform vec2 uViewport;
   uniform float uT;
   uniform int uPhase; // 0 = A (curling page), 1 = B (revealed flat)
@@ -35,11 +37,11 @@ export function createPageflipTransition(ctx: RendererContext): Transition {
     vec4 color = textureLod(uCellColors, uv, 0.0);
     vec2 range = textureLod(uLumaRange, vec2(0.5), 0.0).rg;
     float normalizedLuma = clamp(
-      (dot(color.rgb, vec3(${LUMA[0]}, ${LUMA[1]}, ${LUMA[2]})) - range.r) / (range.g - range.r),
+      (dot(color.rgb, LUMA) - range.r) / (range.g - range.r),
       0.0, 1.0);
-    float radius = sqrt(normalizedLuma) * uCellSize * 0.5;
+    float radius = sqrt(normalizedLuma) * CELL_SIZE * 0.5;
 
-    vec2 cellCenter = (cellCoord + 0.5) * uPitch;
+    vec2 cellCenter = (cellCoord + 0.5) * PITCH;
 
     float foldX = uViewport.x * (1.0 - uT);
 
@@ -86,14 +88,14 @@ export function createPageflipTransition(ctx: RendererContext): Transition {
     }
 
     float scaledRadius = radius * scale;
-    vec2 pos = projPos + aPosition * 0.5 * uPitch * scale;
+    vec2 pos = projPos + aPosition * 0.5 * PITCH * scale;
 
     gl_Position = vec4(pos / uViewport * 2.0 - 1.0, 0.0, 1.0);
 
     vColor = color;
     vRadius = scaledRadius;
     vOpacity = opacity;
-    vPixelOffset = aPosition * 0.5 * uPitch * scale;
+    vPixelOffset = aPosition * 0.5 * PITCH * scale;
   }
   `, `#version 300 es
   precision highp float;
@@ -114,8 +116,6 @@ export function createPageflipTransition(ctx: RendererContext): Transition {
   `);
 
   gl.useProgram(program);
-  gl.uniform1f(gl.getUniformLocation(program, "uCellSize"), CELL_SIZE);
-  gl.uniform1f(gl.getUniformLocation(program, "uPitch"), PITCH);
   gl.uniform2f(gl.getUniformLocation(program, "uCellCount"), ctx.cols, ctx.rows);
   gl.uniform2f(gl.getUniformLocation(program, "uViewport"), ctx.canvasWidth, ctx.canvasHeight);
   gl.uniform1i(gl.getUniformLocation(program, "uCellColors"), 0);
