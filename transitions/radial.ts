@@ -10,7 +10,7 @@ export function createRadialTransition(ctx: RendererContext): Transition {
   uniform sampler2D uLumaRangeA;
   uniform sampler2D uTextureB;
   uniform sampler2D uLumaRangeB;
-  uniform vec2 uCellCount;
+  uniform vec2 uGridSize;
 
   #define CELL_SIZE ${CELL_SIZE.toFixed(1)}
   #define PITCH ${PITCH.toFixed(1)}
@@ -24,11 +24,11 @@ export function createRadialTransition(ctx: RendererContext): Transition {
   void main() {
     vec2 cellCoord = floor(gl_FragCoord.xy / PITCH);
     vec2 cellCenter = (cellCoord + 0.5) * PITCH;
-    vec2 uv = (cellCoord + 0.5) / uCellCount;
+    vec2 uv = (cellCoord + 0.5) / uGridSize;
     float dist = length(gl_FragCoord.xy - cellCenter);
 
     float distFromOrigin = length(gl_FragCoord.xy - uOrigin);
-    vec2 viewport = uCellCount * PITCH;
+    vec2 viewport = uGridSize * PITCH;
     float diameter = max(
       max(length(uOrigin), length(uOrigin - vec2(viewport.x, 0.0))),
       max(length(uOrigin - vec2(0.0, viewport.y)), length(uOrigin - viewport))
@@ -55,7 +55,7 @@ export function createRadialTransition(ctx: RendererContext): Transition {
   `);
 
   gl.useProgram(program);
-  gl.uniform2f(gl.getUniformLocation(program, "uCellCount"), ctx.cols, ctx.rows);
+  gl.uniform2f(gl.getUniformLocation(program, "uGridSize"), ctx.cols, ctx.rows);
   gl.uniform1i(gl.getUniformLocation(program, "uTextureA"), 0);
   gl.uniform1i(gl.getUniformLocation(program, "uLumaRangeA"), 1);
   gl.uniform1i(gl.getUniformLocation(program, "uTextureB"), 2);
@@ -80,11 +80,11 @@ export function createRadialTransition(ctx: RendererContext): Transition {
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, ctx.current.cellTex);
         gl.activeTexture(gl.TEXTURE1);
-        gl.bindTexture(gl.TEXTURE_2D, ctx.current.reduceSteps[ctx.current.reduceSteps.length - 1].texture);
+        gl.bindTexture(gl.TEXTURE_2D, ctx.current.lumaRangeTex);
         gl.activeTexture(gl.TEXTURE2);
         gl.bindTexture(gl.TEXTURE_2D, ctx.next.cellTex);
         gl.activeTexture(gl.TEXTURE3);
-        gl.bindTexture(gl.TEXTURE_2D, ctx.next.reduceSteps[ctx.next.reduceSteps.length - 1].texture);
+        gl.bindTexture(gl.TEXTURE_2D, ctx.next.lumaRangeTex);
 
         gl.uniform1f(uT, t);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);

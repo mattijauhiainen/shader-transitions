@@ -10,7 +10,7 @@ export function createPageflipTransition(ctx: RendererContext): Transition {
 
   uniform sampler2D uCellColors;
   uniform sampler2D uLumaRange;
-  uniform vec2 uCellCount;
+  uniform vec2 uGridSize;
 
   #define CELL_SIZE ${CELL_SIZE.toFixed(1)}
   #define PITCH ${PITCH.toFixed(1)}
@@ -29,10 +29,10 @@ export function createPageflipTransition(ctx: RendererContext): Transition {
   out vec2 vPixelOffset;
 
   void main() {
-    int col = gl_InstanceID % int(uCellCount.x);
-    int row = gl_InstanceID / int(uCellCount.x);
+    int col = gl_InstanceID % int(uGridSize.x);
+    int row = gl_InstanceID / int(uGridSize.x);
     vec2 cellCoord = vec2(col, row);
-    vec2 uv = (cellCoord + 0.5) / uCellCount;
+    vec2 uv = (cellCoord + 0.5) / uGridSize;
 
     vec4 color = textureLod(uCellColors, uv, 0.0);
     vec2 range = textureLod(uLumaRange, vec2(0.5), 0.0).rg;
@@ -116,7 +116,7 @@ export function createPageflipTransition(ctx: RendererContext): Transition {
   `);
 
   gl.useProgram(program);
-  gl.uniform2f(gl.getUniformLocation(program, "uCellCount"), ctx.cols, ctx.rows);
+  gl.uniform2f(gl.getUniformLocation(program, "uGridSize"), ctx.cols, ctx.rows);
   gl.uniform2f(gl.getUniformLocation(program, "uViewport"), ctx.canvasWidth, ctx.canvasHeight);
   gl.uniform1i(gl.getUniformLocation(program, "uCellColors"), 0);
   gl.uniform1i(gl.getUniformLocation(program, "uLumaRange"), 1);
@@ -146,7 +146,7 @@ export function createPageflipTransition(ctx: RendererContext): Transition {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, ctx.next.cellTex);
       gl.activeTexture(gl.TEXTURE1);
-      gl.bindTexture(gl.TEXTURE_2D, ctx.next.reduceSteps[ctx.next.reduceSteps.length - 1].texture);
+      gl.bindTexture(gl.TEXTURE_2D, ctx.next.lumaRangeTex);
       gl.uniform1i(uPhase, 1);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, totalInstances);
 
@@ -154,7 +154,7 @@ export function createPageflipTransition(ctx: RendererContext): Transition {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, ctx.current.cellTex);
       gl.activeTexture(gl.TEXTURE1);
-      gl.bindTexture(gl.TEXTURE_2D, ctx.current.reduceSteps[ctx.current.reduceSteps.length - 1].texture);
+      gl.bindTexture(gl.TEXTURE_2D, ctx.current.lumaRangeTex);
       gl.uniform1i(uPhase, 0);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, totalInstances);
       gl.disable(gl.BLEND);

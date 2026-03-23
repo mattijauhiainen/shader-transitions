@@ -2,6 +2,7 @@ import { fullscreenQuadVert } from "./fullscreenQuadVert.ts";
 import { LUMA } from "./luma.ts";
 import { createCollapseTransition } from "./transitions/collapse.ts";
 import { createExplodeTransition } from "./transitions/explode.ts";
+import { createMitosisTransition } from "./transitions/mitosis.ts";
 import { createPageflipTransition } from "./transitions/pageflip.ts";
 import { createRadialTransition } from "./transitions/radial.ts";
 import { createRainTransition } from "./transitions/rain.ts";
@@ -15,6 +16,7 @@ export const PITCH = 6.0;
 export interface HalftoneFrame {
   cellTex: WebGLTexture;
   cellFbo: WebGLFramebuffer;
+  lumaRangeTex: WebGLTexture;
   reduceSteps: { texture: WebGLTexture; fbo: WebGLFramebuffer; w: number; h: number }[];
 }
 
@@ -95,6 +97,7 @@ export class Renderer implements RendererContext {
       createPageflipTransition(this),
       createCollapseTransition(this),
       createRainTransition(this),
+      createMitosisTransition(this),
     ];
 
     gl.enableVertexAttribArray(0);
@@ -159,7 +162,7 @@ export class Renderer implements RendererContext {
 
     const reduceSteps = sizes.map(([w, h]) => ({ ...this.createTextureAndFBO(w, h), w, h }));
 
-    return { cellTex, cellFbo, reduceSteps };
+    return { cellTex, cellFbo, lumaRangeTex: reduceSteps[reduceSteps.length - 1].texture, reduceSteps };
   }
 
   createProgram(vertSrc: string, fragSrc: string): WebGLProgram {

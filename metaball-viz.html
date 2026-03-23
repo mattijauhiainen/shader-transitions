@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { background: #1a1a1a; color: #eee; font-family: monospace; display: flex; flex-direction: column; align-items: center; margin: 20px; }
+  canvas { border: 1px solid #333; margin: 10px; }
+  .row { display: flex; gap: 20px; align-items: flex-start; }
+  .controls { margin: 10px; }
+  label { display: block; margin: 8px 0; }
+  input[type=range] { width: 300px; }
+  h3 { margin: 4px 0; text-align: center; }
+</style>
+</head>
+<body>
+<h2>Metaball Merge Visualization</h2>
+<div class="controls">
+  <label>mergeT: <input type="range" id="mergeT" min="0" max="1" step="0.01" value="0"> <span id="mergeTVal">0.00</span></label>
+  <label>Blend mode: <b>max</b> at 0 → <b>sum</b> at 1 (driven by mergeT)</label>
+</div>
+<div class="row">
+  <div>
+    <h3>Field from each blob (1D cross-section)</h3>
+    <canvas id="graph" width="600" height="300"></canvas>
+  </div>
+  <div>
+    <h3>2D metaball render</h3>
+    <canvas id="render" width="300" height="300"></canvas>
+  </div>
+</div>
+<div class="row">
+  <div>
+    <h3>Field strength heatmap</h3>
+    <canvas id="heatmap" width="300" height="300"></canvas>
+  </div>
+  <div>
+    <h3>4-blob merge (what the shader does)</h3>
+    <canvas id="quad" width="300" height="300"></canvas>
+  </div>
+</div>
+
+<script>
+const slider = document.getElementById('mergeT');
+const mergeTVal = document.getElementById('mergeTVal');
+const graphCanvas = document.getElementById('graph');
+const renderCanvas = document.getElementById('render');
+const heatmapCanvas = document.getElementById('heatmap');
+const quadCanvas = document.getElementById('quad');
+
+const graphCtx = graphCanvas.getContext('2d');
+const renderCtx = renderCanvas.getContext('2d');
+const heatmapCtx = heatmapCanvas.getContext('2d');
+const quadCtx = quadCanvas.getContext('2d');
+
+const R = 30; // blob radius
+
+function field(dx, dy, radius) {
+  const d2 = dx * dx + dy * dy;
+  return (radius * radius) / Math.max(d2, 0.5);
+}
+
+function draw() {
+  const mergeT = parseFloat(slider.value);
+  mergeTVal.textContent = mergeT.toFixed(2);
+
+  drawGraph(mergeT);
+  drawRender(mergeT);
+  drawHeatmap(mergeT);
+  drawQuad(mergeT);
+}
+
+function drawGraph(mergeT) {
+  const ctx = graphCtx;
+  const W = graphCanvas.width;
+  const H = graphCanvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const centerA = W * 0.35;
+  const centerB = W * 0.65;
+  const r = R * Math.sqrt(1 - mergeT);
+  const graphScale = H * 0.4;
+
+  // Grid
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 1;
+  // field = 1 line
+  const y1 = H - 30 - 1 * graphScale;
+  ctx.beginPath();
+  ctx.setLineDash([4, 4]);
+  ctx.moveTo(0, y1);
+  ctx.lineTo(W, y1);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#888';
+  ctx.font = '11px monospace';
+  ctx.fillText('field = 1 (surface)', 5, y1 - 4);
+
+  // Baseline
+  const baseline = H - 30;
+  ctx.strokeStyle = '#444';
+  ctx.beginPath();
+  ctx.moveTo(0, baseline);
+  ctx.lineTo(W, baseline);
+  ctx.stroke();
+
+  // Field A
+  ctx.strokeStyle = '#ff6666';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let x = 0; x < W; x++) {
+    const d = Math.abs(x - centerA);
+    const f = r > 0 ? (r * r) / Math.max(d * d, 0.5) : 0;
+    const y = baseline - f * graphScale;
+    x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, Math.max(y, 10));
+  }
+  ctx.stroke();
+
+  // Field B
+  ctx.strokeStyle = '#6666ff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let x = 0; x < W; x++) {
+    const d = Math.abs(x - centerB);
+    const f = r > 0 ? (r * r) / Math.max(d * d, 0.5) : 0;
+    const y = baseline - f * graphScale;
+    x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, Math.max(y, 10));
+  }
+  ctx.stroke();
+
+  // Combined field (mix of max and sum)
+  ctx.strokeStyle = '#ffff44';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  for (let x = 0; x < W; x++) {
+    const dA = Math.abs(x - centerA);
+    const dB = Math.abs(x - centerB);
+    const fA = r > 0 ? (r * r) / Math.max(dA * dA, 0.5) : 0;
+    const fB = r > 0 ? (r * r) / Math.max(dB * dB, 0.5) : 0;
+    const maxF = Math.max(fA, fB);
+    const sumF = fA + fB;
+    const combined = maxF + (sumF - maxF) * mergeT;
+    const y = baseline - combined * graphScale;
+    x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, Math.max(y, 10));
+  }
+  ctx.stroke();
+
+  // Labels
+  ctx.font = '12px monospace';
+  ctx.fillStyle = '#ff6666';
+  ctx.fillText('blob A field', 10, 20);
+  ctx.fillStyle = '#6666ff';
+  ctx.fillText('blob B field', 10, 36);
+  ctx.fillStyle = '#ffff44';
+  ctx.fillText(`combined (mix=${mergeT.toFixed(2)})`, 10, 52);
+  ctx.fillStyle = '#888';
+  ctx.fillText('A', centerA - 3, baseline + 16);
+  ctx.fillText('B', centerB - 3, baseline + 16);
+}
+
+function drawRender(mergeT) {
+  const ctx = renderCtx;
+  const W = renderCanvas.width;
+  const H = renderCanvas.height;
+
+  const img = ctx.createImageData(W, H);
+  const centerA = [W * 0.35, H * 0.5];
+  const centerB = [W * 0.65, H * 0.5];
+  const r = R * Math.sqrt(1 - mergeT);
+
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const fA = field(x - centerA[0], y - centerA[1], r);
+      const fB = field(x - centerB[0], y - centerB[1], r);
+      const maxF = Math.max(fA, fB);
+      const sumF = fA + fB;
+      const combined = maxF + (sumF - maxF) * mergeT;
+
+      const i = (y * W + x) * 4;
+      if (combined >= 1) {
+        // Weighted color blend
+        const w = fA + fB || 1;
+        img.data[i] = Math.round((fA / w) * 255 * 0.9 + (fB / w) * 100);
+        img.data[i + 1] = Math.round((fA / w) * 100 + (fB / w) * 100);
+        img.data[i + 2] = Math.round((fA / w) * 100 + (fB / w) * 255 * 0.9);
+      } else {
+        img.data[i] = 20;
+        img.data[i + 1] = 20;
+        img.data[i + 2] = 20;
+      }
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  ctx.fillStyle = '#888';
+  ctx.font = '11px monospace';
+  ctx.fillText('field >= 1 → filled', 8, 16);
+}
+
+function drawHeatmap(mergeT) {
+  const ctx = heatmapCtx;
+  const W = heatmapCanvas.width;
+  const H = heatmapCanvas.height;
+
+  const img = ctx.createImageData(W, H);
+  const centerA = [W * 0.35, H * 0.5];
+  const centerB = [W * 0.65, H * 0.5];
+  const r = R * Math.sqrt(1 - mergeT);
+
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const fA = field(x - centerA[0], y - centerA[1], r);
+      const fB = field(x - centerB[0], y - centerB[1], r);
+      const maxF = Math.max(fA, fB);
+      const sumF = fA + fB;
+      const combined = maxF + (sumF - maxF) * mergeT;
+
+      const v = Math.min(combined, 3) / 3;
+      const i = (y * W + x) * 4;
+
+      // Heatmap: black → blue → yellow → white
+      if (v < 0.33) {
+        const t = v / 0.33;
+        img.data[i] = 0;
+        img.data[i + 1] = 0;
+        img.data[i + 2] = Math.round(t * 200);
+      } else if (v < 0.66) {
+        const t = (v - 0.33) / 0.33;
+        img.data[i] = Math.round(t * 255);
+        img.data[i + 1] = Math.round(t * 220);
+        img.data[i + 2] = Math.round((1 - t) * 200);
+      } else {
+        const t = (v - 0.66) / 0.34;
+        img.data[i] = 255;
+        img.data[i + 1] = Math.round(220 + t * 35);
+        img.data[i + 2] = Math.round(t * 255);
+      }
+      img.data[i + 3] = 255;
+
+      // Draw contour at field = 1
+      if (Math.abs(combined - 1.0) < 0.05) {
+        img.data[i] = 255;
+        img.data[i + 1] = 255;
+        img.data[i + 2] = 255;
+      }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  ctx.fillStyle = '#fff';
+  ctx.font = '11px monospace';
+  ctx.fillText('white contour = surface (field=1)', 8, 16);
+}
+
+function drawQuad(mergeT) {
+  const ctx = quadCtx;
+  const W = quadCanvas.width;
+  const H = quadCanvas.height;
+
+  const img = ctx.createImageData(W, H);
+  const spacing = 60;
+  const cx = W / 2, cy = H / 2;
+  const centers = [
+    [cx - spacing/2, cy - spacing/2],
+    [cx + spacing/2, cy - spacing/2],
+    [cx - spacing/2, cy + spacing/2],
+    [cx + spacing/2, cy + spacing/2],
+  ];
+  const colors = [
+    [220, 80, 80],
+    [80, 180, 80],
+    [80, 80, 220],
+    [220, 180, 50],
+  ];
+  const mergedCenter = [cx, cy];
+  const subR = R * Math.sqrt(Math.max(0, 1 - mergeT));
+  const mergedR = R * 1.5 * Math.sqrt(mergeT);
+
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      let sumF = 0, maxF = 0;
+      let cr = 0, cg = 0, cb = 0, wt = 0;
+
+      for (let k = 0; k < 4; k++) {
+        const f = field(x - centers[k][0], y - centers[k][1], subR);
+        sumF += f;
+        maxF = Math.max(maxF, f);
+        cr += colors[k][0] * f;
+        cg += colors[k][1] * f;
+        cb += colors[k][2] * f;
+        wt += f;
+      }
+
+      const subField = maxF + (sumF - maxF) * mergeT;
+
+      // Merged center dot
+      let mergedField = 0;
+      if (mergeT > 0.001) {
+        mergedField = field(x - mergedCenter[0], y - mergedCenter[1], mergedR);
+        cr += 180 * mergedField;
+        cg += 140 * mergedField;
+        cb += 100 * mergedField;
+        wt += mergedField;
+      }
+
+      const totalField = subField + mergedField;
+      const i = (y * W + x) * 4;
+
+      if (totalField >= 1) {
+        img.data[i] = Math.min(255, Math.round(cr / wt));
+        img.data[i + 1] = Math.min(255, Math.round(cg / wt));
+        img.data[i + 2] = Math.min(255, Math.round(cb / wt));
+      } else {
+        img.data[i] = 20;
+        img.data[i + 1] = 20;
+        img.data[i + 2] = 20;
+      }
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  // Draw sub-cell centers
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  for (const [cx, cy] of centers) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Merged center
+  ctx.fillStyle = 'rgba(255,255,0,0.5)';
+  ctx.beginPath();
+  ctx.arc(mergedCenter[0], mergedCenter[1], 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#888';
+  ctx.font = '11px monospace';
+  ctx.fillText('4 sub-cells + merged center', 8, 16);
+}
+
+slider.addEventListener('input', draw);
+draw();
+</script>
+</body>
+</html>

@@ -82,7 +82,7 @@ export function createCollapseTransition(ctx: RendererContext): Transition {
   #define PITCH ${PITCH.toFixed(1)}
   #define LUMA vec3(${LUMA[0]}, ${LUMA[1]}, ${LUMA[2]})
   uniform vec2 uMargin;
-  uniform vec2 uCellCount;
+  uniform vec2 uGridSize;
   uniform vec2 uViewport;
   uniform float uTime;
   uniform float uOpacity;
@@ -106,7 +106,7 @@ export function createCollapseTransition(ctx: RendererContext): Transition {
     // at edges, so that the extra grid outside the viewport will repeat the
     // color of the cell from the edge.
     vec2 visibleCoord = cellCoord - uMargin;
-    vec2 colorUV = clamp((visibleCoord + 0.5) / uCellCount, vec2(0.0), vec2(1.0));
+    vec2 colorUV = clamp((visibleCoord + 0.5) / uGridSize, vec2(0.0), vec2(1.0));
 
     vec4 color = textureLod(uCellColors, colorUV, 0.0);
     vec2 range = textureLod(uLumaRange, vec2(0.5), 0.0).rg;
@@ -163,7 +163,7 @@ export function createCollapseTransition(ctx: RendererContext): Transition {
 
   // Cache all uniform locations at setup time
   gl.useProgram(program);
-  gl.uniform2f(gl.getUniformLocation(program, "uCellCount"), ctx.cols, ctx.rows);
+  gl.uniform2f(gl.getUniformLocation(program, "uGridSize"), ctx.cols, ctx.rows);
   gl.uniform2f(gl.getUniformLocation(program, "uViewport"), ctx.canvasWidth, ctx.canvasHeight);
   gl.uniform1i(gl.getUniformLocation(program, "uCellColors"), 0);
   gl.uniform1i(gl.getUniformLocation(program, "uLumaRange"), 1);
@@ -232,7 +232,7 @@ export function createCollapseTransition(ctx: RendererContext): Transition {
           gl.activeTexture(gl.TEXTURE0);
           gl.bindTexture(gl.TEXTURE_2D, ctx.next.cellTex);
           gl.activeTexture(gl.TEXTURE1);
-          gl.bindTexture(gl.TEXTURE_2D, ctx.next.reduceSteps[ctx.next.reduceSteps.length - 1].texture);
+          gl.bindTexture(gl.TEXTURE_2D, ctx.next.lumaRangeTex);
           gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, visibleInstances);
         }
 
@@ -245,7 +245,7 @@ export function createCollapseTransition(ctx: RendererContext): Transition {
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, ctx.current.cellTex);
         gl.activeTexture(gl.TEXTURE1);
-        gl.bindTexture(gl.TEXTURE_2D, ctx.current.reduceSteps[ctx.current.reduceSteps.length - 1].texture);
+        gl.bindTexture(gl.TEXTURE_2D, ctx.current.lumaRangeTex);
         gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, totalInstances);
         gl.disable(gl.BLEND);
       };

@@ -167,7 +167,7 @@ export function createRainTransition(ctx: RendererContext): Transition {
 
     uniform sampler2D uCellColors;
     uniform sampler2D uLumaRange;
-    uniform vec2 uCellCount;
+    uniform vec2 uGridSize;
     uniform vec2 uViewportPx;
     uniform float uTimeNorm;
     uniform int uPhase; // 0 = A (fading out), 1 = B (rain drops)
@@ -191,10 +191,10 @@ export function createRainTransition(ctx: RendererContext): Transition {
     #define SPLASH_WINDOW (FALL_WINDOW * 1.5)
 
     void main() {
-      int col = gl_InstanceID % int(uCellCount.x);
-      int row = gl_InstanceID / int(uCellCount.x);
+      int col = gl_InstanceID % int(uGridSize.x);
+      int row = gl_InstanceID / int(uGridSize.x);
       vec2 cellCoordCells = vec2(col, row);
-      vec2 colorUv = (cellCoordCells + 0.5) / uCellCount;
+      vec2 colorUv = (cellCoordCells + 0.5) / uGridSize;
 
       vec4 color = textureLod(uCellColors, colorUv, 0.0);
       vec2 lumaRange = textureLod(uLumaRange, vec2(0.5), 0.0).rg;
@@ -361,7 +361,7 @@ export function createRainTransition(ctx: RendererContext): Transition {
 
   // Cache uniform locations
   gl.useProgram(program);
-  gl.uniform2f(gl.getUniformLocation(program, "uCellCount"), ctx.cols, ctx.rows);
+  gl.uniform2f(gl.getUniformLocation(program, "uGridSize"), ctx.cols, ctx.rows);
   gl.uniform2f(gl.getUniformLocation(program, "uViewportPx"), ctx.canvasWidth, ctx.canvasHeight);
   gl.uniform1i(gl.getUniformLocation(program, "uCellColors"), 0);
   gl.uniform1i(gl.getUniformLocation(program, "uLumaRange"), 1);
@@ -402,7 +402,7 @@ export function createRainTransition(ctx: RendererContext): Transition {
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, ctx.current.cellTex);
         gl.activeTexture(gl.TEXTURE1);
-        gl.bindTexture(gl.TEXTURE_2D, ctx.current.reduceSteps[ctx.current.reduceSteps.length - 1].texture);
+        gl.bindTexture(gl.TEXTURE_2D, ctx.current.lumaRangeTex);
         gl.activeTexture(gl.TEXTURE2);
         gl.bindTexture(gl.TEXTURE_2D, dropMapTex);
         gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, totalInstances);
@@ -412,7 +412,7 @@ export function createRainTransition(ctx: RendererContext): Transition {
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, ctx.next.cellTex);
         gl.activeTexture(gl.TEXTURE1);
-        gl.bindTexture(gl.TEXTURE_2D, ctx.next.reduceSteps[ctx.next.reduceSteps.length - 1].texture);
+        gl.bindTexture(gl.TEXTURE_2D, ctx.next.lumaRangeTex);
         gl.activeTexture(gl.TEXTURE2);
         gl.bindTexture(gl.TEXTURE_2D, dropMapTex);
         gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, totalInstances);
