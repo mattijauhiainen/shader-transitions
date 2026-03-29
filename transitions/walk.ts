@@ -10,9 +10,9 @@ export function createWalkTransition(ctx: RendererContext): Transition {
   const gl = ctx.gl;
   const program = ctx.createProgram(fullscreenQuadVert, `#version 300 es
   precision highp float;
-  uniform sampler2D uTextureA;
+  uniform sampler2D uCellColorsA;
   uniform sampler2D uLumaRangeA;
-  uniform sampler2D uTextureB;
+  uniform sampler2D uCellColorsB;
   uniform sampler2D uLumaRangeB;
   uniform sampler2D uVisitMap;
   uniform vec2 uGridSize;
@@ -20,7 +20,7 @@ export function createWalkTransition(ctx: RendererContext): Transition {
   #define CELL_SIZE ${CELL_SIZE.toFixed(1)}
   #define PITCH ${PITCH.toFixed(1)}
   #define LUMA vec3(${LUMA[0]}, ${LUMA[1]}, ${LUMA[2]})
-  uniform float uT;
+  uniform float uTime;
   uniform float uWindow;
 
   in vec2 vUV;
@@ -33,9 +33,9 @@ export function createWalkTransition(ctx: RendererContext): Transition {
     float dist = length(gl_FragCoord.xy - cellCenter);
 
     float visitTime = texture(uVisitMap, uv).r;
-    float cellT = smoothstep(visitTime, visitTime + uWindow, uT);
+    float cellT = smoothstep(visitTime, visitTime + uWindow, uTime);
 
-    vec4 colorA = texture(uTextureA, uv);
+    vec4 colorA = texture(uCellColorsA, uv);
     vec2 rangeA = texture(uLumaRangeA, vec2(0.5)).rg;
     float normA = (dot(colorA.rgb, LUMA) - rangeA.r) / (rangeA.g - rangeA.r);
 
@@ -43,7 +43,7 @@ export function createWalkTransition(ctx: RendererContext): Transition {
     float radiusA = sqrt(normA) * CELL_SIZE * 0.5 * scaleA;
     float alphaA = smoothstep(radiusA + 0.5, radiusA - 0.5, dist);
 
-    vec4 colorB = texture(uTextureB, uv);
+    vec4 colorB = texture(uCellColorsB, uv);
     vec2 rangeB = texture(uLumaRangeB, vec2(0.5)).rg;
     float normB = (dot(colorB.rgb, LUMA) - rangeB.r) / (rangeB.g - rangeB.r);
 
@@ -58,14 +58,14 @@ export function createWalkTransition(ctx: RendererContext): Transition {
 
   gl.useProgram(program);
   gl.uniform2f(gl.getUniformLocation(program, "uGridSize"), ctx.cols, ctx.rows);
-  gl.uniform1i(gl.getUniformLocation(program, "uTextureA"), 0);
+  gl.uniform1i(gl.getUniformLocation(program, "uCellColorsA"), 0);
   gl.uniform1i(gl.getUniformLocation(program, "uLumaRangeA"), 1);
-  gl.uniform1i(gl.getUniformLocation(program, "uTextureB"), 2);
+  gl.uniform1i(gl.getUniformLocation(program, "uCellColorsB"), 2);
   gl.uniform1i(gl.getUniformLocation(program, "uLumaRangeB"), 3);
   gl.uniform1i(gl.getUniformLocation(program, "uVisitMap"), 4);
   gl.useProgram(null);
 
-  const uT = gl.getUniformLocation(program, "uT")!;
+  const uTime = gl.getUniformLocation(program, "uTime")!;
   const uWindow = gl.getUniformLocation(program, "uWindow")!;
 
   const visitMapTex = gl.createTexture()!;
@@ -102,7 +102,7 @@ export function createWalkTransition(ctx: RendererContext): Transition {
         gl.activeTexture(gl.TEXTURE4);
         gl.bindTexture(gl.TEXTURE_2D, visitMapTex);
 
-        gl.uniform1f(uT, t);
+        gl.uniform1f(uTime, t);
         gl.uniform1f(uWindow, WALK_WINDOW);
 
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);

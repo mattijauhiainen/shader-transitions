@@ -15,7 +15,7 @@ export function createExplodeTransition(ctx: RendererContext): Transition {
   #define PITCH ${PITCH.toFixed(1)}
   #define LUMA vec3(${LUMA[0]}, ${LUMA[1]}, ${LUMA[2]})
   uniform vec2 uViewport;
-  uniform float uT;
+  uniform float uTime;
   uniform int uPhase; // 0 = A (exploding out), 1 = B (growing in)
 
   in vec2 aPosition;
@@ -53,7 +53,7 @@ export function createExplodeTransition(ctx: RendererContext): Transition {
     float staggerSpread = 0.8;
     float maxDelay = 0.2;
     float staggerDelay = normalizedDistFromCenter * staggerSpread * maxDelay;
-    float localT = clamp((uT - staggerDelay) / (1.0 - staggerDelay), 0.0, 1.0);
+    float localT = clamp((uTime - staggerDelay) / (1.0 - staggerDelay), 0.0, 1.0);
 
     if (uPhase == 0) {
       // A: explode outward
@@ -107,7 +107,7 @@ export function createExplodeTransition(ctx: RendererContext): Transition {
   gl.uniform1i(gl.getUniformLocation(program, "uLumaRange"), 1);
   gl.useProgram(null);
 
-  const uT = gl.getUniformLocation(program, "uT")!;
+  const uTime = gl.getUniformLocation(program, "uTime")!;
   const uPhase = gl.getUniformLocation(program, "uPhase")!;
 
   const totalInstances = ctx.cols * ctx.rows;
@@ -122,7 +122,7 @@ export function createExplodeTransition(ctx: RendererContext): Transition {
       gl.clearColor(0, 0, 0, 1);
       gl.clear(gl.COLOR_BUFFER_BIT);
 
-      gl.uniform1f(uT, t);
+      gl.uniform1f(uTime, t);
 
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);

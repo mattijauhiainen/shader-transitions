@@ -6,16 +6,16 @@ export function createWipeTransition(ctx: RendererContext): Transition {
   const gl = ctx.gl;
   const program = ctx.createProgram(fullscreenQuadVert, `#version 300 es
   precision highp float;
-  uniform sampler2D uTextureA;
+  uniform sampler2D uCellColorsA;
   uniform sampler2D uLumaRangeA;
-  uniform sampler2D uTextureB;
+  uniform sampler2D uCellColorsB;
   uniform sampler2D uLumaRangeB;
   uniform vec2 uGridSize;
 
   #define CELL_SIZE ${CELL_SIZE.toFixed(1)}
   #define PITCH ${PITCH.toFixed(1)}
   #define LUMA vec3(${LUMA[0]}, ${LUMA[1]}, ${LUMA[2]})
-  uniform float uT;
+  uniform float uTime;
 
   in vec2 vUV;
   out vec4 fragColor;
@@ -28,10 +28,10 @@ export function createWipeTransition(ctx: RendererContext): Transition {
 
     vec2 viewport = uGridSize * PITCH;
     float bandWidth = viewport.x * 0.30;
-    float rightEdge = (viewport.x + bandWidth) * uT;
+    float rightEdge = (viewport.x + bandWidth) * uTime;
     float grad = clamp(1.0 - (rightEdge - gl_FragCoord.x) / bandWidth, 0.0, 1.0);
 
-    vec4 colorA = texture(uTextureA, uv);
+    vec4 colorA = texture(uCellColorsA, uv);
     vec2 rangeA = texture(uLumaRangeA, vec2(0.5)).rg;
     float normA = (dot(colorA.rgb, LUMA) - rangeA.r) / (rangeA.g - rangeA.r);
 
@@ -41,7 +41,7 @@ export function createWipeTransition(ctx: RendererContext): Transition {
     float radiusA = sqrt(normA) * CELL_SIZE * 0.5 * scaleA;
     float alphaA = smoothstep(radiusA + 0.5, radiusA - 0.5, dist);
 
-    vec4 colorB = texture(uTextureB, uv);
+    vec4 colorB = texture(uCellColorsB, uv);
     vec2 rangeB = texture(uLumaRangeB, vec2(0.5)).rg;
     float normB = (dot(colorB.rgb, LUMA) - rangeB.r) / (rangeB.g - rangeB.r);
 
@@ -55,13 +55,13 @@ export function createWipeTransition(ctx: RendererContext): Transition {
 
   gl.useProgram(program);
   gl.uniform2f(gl.getUniformLocation(program, "uGridSize"), ctx.cols, ctx.rows);
-  gl.uniform1i(gl.getUniformLocation(program, "uTextureA"), 0);
+  gl.uniform1i(gl.getUniformLocation(program, "uCellColorsA"), 0);
   gl.uniform1i(gl.getUniformLocation(program, "uLumaRangeA"), 1);
-  gl.uniform1i(gl.getUniformLocation(program, "uTextureB"), 2);
+  gl.uniform1i(gl.getUniformLocation(program, "uCellColorsB"), 2);
   gl.uniform1i(gl.getUniformLocation(program, "uLumaRangeB"), 3);
   gl.useProgram(null);
 
-  const uT = gl.getUniformLocation(program, "uT")!;
+  const uTime = gl.getUniformLocation(program, "uTime")!;
 
   return {
     durationMs: 2500,
@@ -80,7 +80,7 @@ export function createWipeTransition(ctx: RendererContext): Transition {
       gl.activeTexture(gl.TEXTURE3);
       gl.bindTexture(gl.TEXTURE_2D, ctx.next.lumaRangeTex);
 
-      gl.uniform1f(uT, t);
+      gl.uniform1f(uTime, t);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     },
   };
