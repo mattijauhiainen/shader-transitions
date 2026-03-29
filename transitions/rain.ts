@@ -1,5 +1,7 @@
 import { LUMA } from "../luma.ts";
 import { CELL_SIZE, PITCH, type RendererContext, type Transition } from "../renderer.ts";
+import fragSrc from "./rain.frag.glsl" with { type: "text" };
+import vertSrc from "./rain.vert.glsl" with { type: "text" };
 
 const DURATION_MS = 15000;
 // Fraction of normalized time [0,1] for a single drop's fall animation
@@ -161,208 +163,16 @@ function generateDropMap(cols: number, rows: number): Float32Array {
 export function createRainTransition(ctx: RendererContext): Transition {
   const gl = ctx.gl;
 
-  const program = ctx.createProgram(
-    `#version 300 es
-    precision highp float;
-
-    uniform sampler2D uCellColors;
-    uniform sampler2D uLumaRange;
-    uniform vec2 uGridSize;
-    uniform vec2 uViewportPx;
-    uniform float uTimeNorm;
-    uniform int uPhase; // 0 = A (fading out), 1 = B (rain drops)
-    uniform sampler2D uDropMap;
-
-    in vec2 aPosition;
-
-    flat out vec4 vColor;
-    flat out float vRadiusPx;
-    flat out float vOpacityNorm;
-    flat out float vDropHeightNorm;
-    flat out vec2 vRadialDir;
-    out vec2 vOffsetPx;
-
-    flat out float vSplashNorm;
-
-    #define CELL_SIZE ${CELL_SIZE.toFixed(1)}
-    #define PITCH ${PITCH.toFixed(1)}
-    #define LUMA vec3(${LUMA[0]}, ${LUMA[1]}, ${LUMA[2]})
-    #define FALL_WINDOW ${FALL_WINDOW}
-    #define SPLASH_WINDOW (FALL_WINDOW * 1.5)
-
-    void main() {
-      int col = gl_InstanceID % int(uGridSize.x);
-      int row = gl_InstanceID / int(uGridSize.x);
-      vec2 cellCoordCells = vec2(col, row);
-      vec2 colorUv = (cellCoordCells + 0.5) / uGridSize;
-
-      vec4 color = textureLod(uCellColors, colorUv, 0.0);
-      vec2 lumaRange = textureLod(uLumaRange, vec2(0.5), 0.0).rg;
-      float lumaNorm = clamp(
-        (dot(color.rgb, LUMA) - lumaRange.r) / (lumaRange.g - lumaRange.r),
-        0.0,
-        1.0
-      );
-      float halftoneRadiusPx = sqrt(lumaNorm) * CELL_SIZE * 0.5;
-      vec2 cellPosPx = (cellCoordCells + 0.5) * PITCH;
-
-      vec2 dropData = texelFetch(uDropMap, ivec2(col, row), 0).rg;
-      float releaseTimeNorm = dropData.r;
-      float cellDistCells = dropData.g; // Manhattan distance from drop center (0, 1, or 2)
-      bool isDropCenter = cellDistCells < 0.5;
-      float elapsedNorm = max(0.0, uTimeNorm - releaseTimeNorm);
-      float fallProgressNorm = clamp(elapsedNorm / FALL_WINDOW, 0.0, 1.0);
-      float splashElapsedNorm = elapsedNorm - FALL_WINDOW;
-      float splashProgressNorm = clamp(splashElapsedNorm / SPLASH_WINDOW, 0.0, 1.0);
-
-      vColor = color;
-
-      // Phase A: fade out old cells, staggered by distance from drop center
-      if (uPhase == 0) {
-        vRadiusPx = halftoneRadiusPx;
-        vDropHeightNorm = 0.0;
-        vRadialDir = vec2(0.0, 1.0);
-        vSplashNorm = -1.0;
-        float staggerDelay = cellDistCells * 0.1;
-        float staggeredProgress = clamp((splashProgressNorm - staggerDelay) / (1.0 - staggerDelay), 0.0, 1.0);
-        vOpacityNorm = 1.0 - staggeredProgress;
-        vec2 quadOffsetPx = aPosition * 0.5 * PITCH;
-        vOffsetPx = quadOffsetPx;
-        gl_Position = vec4((cellPosPx + quadOffsetPx) / uViewportPx * 2.0 - 1.0, 0.0, 1.0);
-        return;
-      }
-
-      // Phase B: not yet released, hide off-screen
-      if (splashElapsedNorm <= 0.0 && !isDropCenter) {
-        vRadiusPx = 0.0;
-        vOpacityNorm = 0.0;
-        vDropHeightNorm = 0.0;
-        vRadialDir = vec2(0.0, 1.0);
-        vSplashNorm = -1.0;
-        vOffsetPx = vec2(0.0);
-        gl_Position = vec4(2.0, 2.0, 0.0, 1.0);
-        return;
-      }
-
-      // Phase B: drop center still falling
-      if (isDropCenter && splashElapsedNorm <= 0.0) {
-        vec2 screenCenterPx = uViewportPx * 0.5;
-        float observerHeightPx = uViewportPx.x * 1.0;
-        float dropHeightPx = observerHeightPx * (1.0 - fallProgressNorm);
-        vec2 groundOffsetPx = cellPosPx - screenCenterPx;
-        float perspectiveScale = observerHeightPx / max(observerHeightPx - dropHeightPx, observerHeightPx * 0.05);
-        vec2 projectedOffsetPx = groundOffsetPx * perspectiveScale;
-        vec2 posPx = screenCenterPx + projectedOffsetPx;
-
-        vRadiusPx = halftoneRadiusPx * perspectiveScale;
-        vOpacityNorm = smoothstep(0.0, 0.15, fallProgressNorm);
-        vDropHeightNorm = 1.0 - fallProgressNorm;
-        vSplashNorm = -1.0;
-
-        vec2 radialDir = normalize(projectedOffsetPx);
-        float radialLenPx = length(projectedOffsetPx);
-        vRadialDir = radialLenPx > 0.001 ? radialDir : vec2(0.0, 1.0);
-
-        float stretch = 1.0 + vDropHeightNorm * 1.0;
-        vec2 tangentDir = vec2(-vRadialDir.y, vRadialDir.x);
-        vec2 localPos = vec2(dot(aPosition, vRadialDir), dot(aPosition, tangentDir));
-        localPos.x *= stretch;
-        vec2 stretchedPos = localPos.x * vRadialDir + localPos.y * tangentDir;
-
-        posPx += stretchedPos * 0.5 * PITCH * perspectiveScale;
-        vOffsetPx = stretchedPos * 0.5 * PITCH * perspectiveScale;
-        gl_Position = vec4(posPx / uViewportPx * 2.0 - 1.0, 0.0, 1.0);
-        return;
-      }
-
-      // Phase B: center landed, show ripple
-      if (isDropCenter && splashElapsedNorm > 0.0) {
-        vRadiusPx = halftoneRadiusPx;
-        vOpacityNorm = 1.0;
-        vDropHeightNorm = 0.0;
-        vRadialDir = vec2(0.0, 1.0);
-        vSplashNorm = splashProgressNorm;
-        float rippleScale = 1.0 + splashProgressNorm * 6.0;
-        vec2 quadOffsetPx = aPosition * 0.5 * PITCH * rippleScale;
-        vOffsetPx = quadOffsetPx;
-        gl_Position = vec4((cellPosPx + quadOffsetPx) / uViewportPx * 2.0 - 1.0, 0.0, 1.0);
-        return;
-      }
-
-      // Phase B: neighbor landed, fade in staggered by distance
-      vRadiusPx = halftoneRadiusPx;
-      vDropHeightNorm = 0.0;
-      vRadialDir = vec2(0.0, 1.0);
-      vSplashNorm = -1.0;
-      float staggerDelay = cellDistCells * 0.1;
-      vOpacityNorm = clamp((splashProgressNorm - staggerDelay) / (1.0 - staggerDelay), 0.0, 1.0);
-      vec2 quadOffsetPx = aPosition * 0.5 * PITCH;
-      vOffsetPx = quadOffsetPx;
-      gl_Position = vec4((cellPosPx + quadOffsetPx) / uViewportPx * 2.0 - 1.0, 0.0, 1.0);
-    }
-    `,
-    `#version 300 es
-    precision highp float;
-
-    flat in vec4 vColor;
-    flat in float vRadiusPx;
-    flat in float vOpacityNorm;
-    flat in float vDropHeightNorm;
-    flat in vec2 vRadialDir;
-    flat in float vSplashNorm;
-    in vec2 vOffsetPx;
-
-    out vec4 fragColor;
-
-    void main() {
-      float distPx = length(vOffsetPx);
-
-      if (vSplashNorm >= 0.0) {
-        // Landed: draw solid circle + expanding ripple ring
-        float circle = smoothstep(vRadiusPx + 0.5, vRadiusPx - 0.5, distPx);
-
-        // Ripple: expanding ring from radius outward
-        float rippleRadiusPx = vRadiusPx + vSplashNorm * vRadiusPx * 6.0;
-        float ringWidthPx = 1.5;
-        float ring = smoothstep(rippleRadiusPx - ringWidthPx, rippleRadiusPx, distPx)
-                   * smoothstep(rippleRadiusPx + ringWidthPx, rippleRadiusPx, distPx);
-        float rippleAlpha = ring * (1.0 - vSplashNorm);
-
-        float a = circle * vOpacityNorm;
-        vec3 col = vColor.rgb * a + vColor.rgb * rippleAlpha * (1.0 - a);
-        float alpha = a + rippleAlpha * (1.0 - a);
-        fragColor = vec4(col, alpha);
-      } else if (vDropHeightNorm > 0.001) {
-        // Still falling: motion blur + sphere shading
-        float stretch = 1.0 + vDropHeightNorm * 2.0;
-        float radialCompPx = dot(vOffsetPx, vRadialDir);
-        float tangentCompPx = dot(vOffsetPx, vec2(-vRadialDir.y, vRadialDir.x));
-        vec2 compressedPx = vec2(radialCompPx / stretch, tangentCompPx);
-        float compDistPx = length(compressedPx);
-        float circle = smoothstep(vRadiusPx + 0.5, vRadiusPx - 0.5, compDistPx);
-
-        vec2 nxy = compressedPx / max(vRadiusPx, 0.001);
-        float r2 = dot(nxy, nxy);
-        float nz = sqrt(max(0.0, 1.0 - r2));
-        vec3 lightDir = normalize(vec3(-0.4, 0.5, 0.8));
-        vec3 normal = vec3(nxy, nz);
-        float diffuse = max(dot(normal, lightDir), 0.0);
-        float shading = mix(0.5 + 0.5 * diffuse, 1.0, vDropHeightNorm);
-
-        fragColor = vec4(vColor.rgb * shading * circle * vOpacityNorm, circle * vOpacityNorm);
-      } else {
-        // Phase A: flat circles
-        float circle = smoothstep(vRadiusPx + 0.5, vRadiusPx - 0.5, distPx);
-        fragColor = vec4(vColor.rgb * circle * vOpacityNorm, circle * vOpacityNorm);
-      }
-    }
-    `
-  );
+  const program = ctx.createProgram(vertSrc, fragSrc);
 
   // Cache uniform locations
   gl.useProgram(program);
   gl.uniform2f(gl.getUniformLocation(program, "uGridSize"), ctx.cols, ctx.rows);
   gl.uniform2f(gl.getUniformLocation(program, "uViewportPx"), ctx.canvasWidth, ctx.canvasHeight);
+  gl.uniform1f(gl.getUniformLocation(program, "uCellSize"), CELL_SIZE);
+  gl.uniform1f(gl.getUniformLocation(program, "uPitch"), PITCH);
+  gl.uniform3f(gl.getUniformLocation(program, "uLuma"), LUMA[0], LUMA[1], LUMA[2]);
+  gl.uniform1f(gl.getUniformLocation(program, "uFallWindow"), FALL_WINDOW);
   gl.uniform1i(gl.getUniformLocation(program, "uCellColors"), 0);
   gl.uniform1i(gl.getUniformLocation(program, "uLumaRange"), 1);
   gl.uniform1i(gl.getUniformLocation(program, "uDropMap"), 2);

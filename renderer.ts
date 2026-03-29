@@ -1,4 +1,6 @@
-import { fullscreenQuadVert } from "./fullscreenQuadVert.ts";
+import fullscreenQuadVert from "./fullscreenQuad.vert.glsl" with { type: "text" };
+import averageCellColorsFrag from "./averageCellColors.frag.glsl" with { type: "text" };
+import lumaRangesFrag from "./lumaRanges.frag.glsl" with { type: "text" };
 import { LUMA } from "./luma.ts";
 import { createCollapseTransition } from "./transitions/collapse.ts";
 import { createExplodeTransition } from "./transitions/explode.ts";
@@ -82,8 +84,8 @@ export class Renderer implements RendererContext {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
     gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
 
-    this.averageCellColors = this.setupAverageCellColors(fullscreenQuadVert);
-    this.lumaRanges = this.setupLumaRanges(fullscreenQuadVert);
+    this.averageCellColors = this.setupAverageCellColors();
+    this.lumaRanges = this.setupLumaRanges();
 
     this._current = this.createHalftoneFrame();
     this._next = this.createHalftoneFrame();
@@ -190,26 +192,9 @@ export class Renderer implements RendererContext {
     return program;
   }
 
-  private setupAverageCellColors(vertSrc: string) {
+  private setupAverageCellColors() {
     const gl = this.gl;
-    const program = this.createProgram(vertSrc, `#version 300 es
-      precision highp float;
-      uniform sampler2D uTexture;
-      uniform vec2 uImageSize;
-      uniform vec2 uCanvasSize;
-      in vec2 vUV;
-      out vec4 fragColor;
-      void main() {
-        vec2 scale = uCanvasSize / uImageSize;
-        float coverScale = max(scale.x, scale.y);
-        vec2 scaledImageSize = uImageSize * coverScale;
-        vec2 offset = (scaledImageSize - uCanvasSize) * 0.5;
-        vec2 pixelCoord = vUV * uCanvasSize;
-        vec2 imagePixel = pixelCoord + offset;
-        vec2 imageUV    = imagePixel / scaledImageSize;
-        fragColor = texture(uTexture, imageUV);
-      }
-    `);
+    const program = this.createProgram(fullscreenQuadVert, averageCellColorsFrag);
 
     gl.useProgram(program);
     gl.uniform1i(gl.getUniformLocation(program, "uTexture"), 0);
@@ -222,44 +207,13 @@ export class Renderer implements RendererContext {
     };
   }
 
-  private setupLumaRanges(vertSrc: string) {
+  private setupLumaRanges() {
     const gl = this.gl;
-    const program = this.createProgram(vertSrc, `#version 300 es
-      precision highp float;
-      #define LUMA vec3(${LUMA[0]}, ${LUMA[1]}, ${LUMA[2]})
-      uniform sampler2D uTexture;
-      uniform vec2 uInputSize;
-      uniform bool uIsFirstStep;
-      out vec4 fragColor;
-
-      void main() {
-        vec2 texel = 1.0 / uInputSize;
-        vec2 uv = (floor(gl_FragCoord.xy) * 2.0 + 0.5) / uInputSize;
-
-        vec4 a = texture(uTexture, uv);
-        vec4 b = texture(uTexture, uv + vec2(texel.x, 0.0));
-        vec4 c = texture(uTexture, uv + vec2(0.0, texel.y));
-        vec4 d = texture(uTexture, uv + vec2(texel.x, texel.y));
-
-        float minL, maxL;
-        if (uIsFirstStep) {
-          float la = dot(a.rgb, LUMA);
-          float lb = dot(b.rgb, LUMA);
-          float lc = dot(c.rgb, LUMA);
-          float ld = dot(d.rgb, LUMA);
-          minL = min(min(la, lb), min(lc, ld));
-          maxL = max(max(la, lb), max(lc, ld));
-        } else {
-          minL = min(min(a.r, b.r), min(c.r, d.r));
-          maxL = max(max(a.g, b.g), max(c.g, d.g));
-        }
-
-        fragColor = vec4(minL, maxL, 0.0, 1.0);
-      }
-    `);
+    const program = this.createProgram(fullscreenQuadVert, lumaRangesFrag);
 
     gl.useProgram(program);
     gl.uniform1i(gl.getUniformLocation(program, "uTexture"), 0);
+    gl.uniform3f(gl.getUniformLocation(program, "uLuma"), LUMA[0], LUMA[1], LUMA[2]);
     gl.useProgram(null);
 
     return {
