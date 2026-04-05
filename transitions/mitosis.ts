@@ -45,6 +45,7 @@ export function createMitosisTransition(ctx: RendererContext): Transition {
 
   const uTime = gl.getUniformLocation(program, "uTime")!;
   const uLevelDuration = gl.getUniformLocation(program, "uLevelDuration")!;
+  const vao = ctx.createQuadVAO();
   let mippedTexA: WebGLTexture | null = null;
   let mippedTexB: WebGLTexture | null = null;
   let mergeTex: WebGLTexture | null = null;
@@ -111,7 +112,9 @@ export function createMitosisTransition(ctx: RendererContext): Transition {
 
         gl.uniform1f(uTime, t);
         gl.uniform1f(uLevelDuration, normalizedDuration);
+        gl.bindVertexArray(vao);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        gl.bindVertexArray(null);
       };
     },
     dispose() {

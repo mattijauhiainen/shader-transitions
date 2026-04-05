@@ -10,6 +10,7 @@ import { createRadialTransition } from "./transitions/radial.ts";
 import { createRainTransition } from "./transitions/rain.ts";
 import { createShrinkTransition } from "./transitions/shrink.ts";
 import { createWalkTransition } from "./transitions/walk.ts";
+import { createFlipTransition } from "./transitions/flip.ts";
 import { createWipeTransition } from "./transitions/wipe.ts";
 
 export const CELL_SIZE = 5.0;
@@ -31,6 +32,7 @@ export interface RendererContext {
   readonly current: HalftoneFrame;
   readonly next: HalftoneFrame;
   createProgram(vertSrc: string, fragSrc: string): WebGLProgram;
+  createQuadVAO(): WebGLVertexArrayObject;
 }
 
 export interface Transition {
@@ -58,7 +60,7 @@ export class Renderer implements RendererContext {
   private _current: HalftoneFrame;
   private _next: HalftoneFrame;
   private _transitions: Transition[];
-  private buffer: WebGLBuffer;
+  private quadVAO: WebGLVertexArrayObject;
 
   get current(): HalftoneFrame { return this._current; }
   get next(): HalftoneFrame { return this._next; }
@@ -74,15 +76,7 @@ export class Renderer implements RendererContext {
     this.rows = Math.ceil(height / PITCH);
 
 
-    const positions = new Float32Array([
-      -1, -1,
-      1, -1,
-      -1, 1,
-      1, 1,
-    ]);
-    this.buffer = gl.createBuffer()!;
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+    this.quadVAO = this.createQuadVAO();
 
     this.averageCellColors = this.setupAverageCellColors();
     this.lumaRanges = this.setupLumaRanges();
@@ -100,10 +94,8 @@ export class Renderer implements RendererContext {
       createCollapseTransition(this),
       createRainTransition(this),
       createMitosisTransition(this),
+      createFlipTransition(this),
     ];
-
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
   }
 
   private uploadImage(img: HTMLImageElement): WebGLTexture {
@@ -167,19 +159,36 @@ export class Renderer implements RendererContext {
     return { cellTex, cellFbo, lumaRangeTex: reduceSteps[reduceSteps.length - 1].texture, reduceSteps };
   }
 
+  // Creates a Vertex array object with a quad (two triangles,
+  // four vertices), forming a square.
+  createQuadVAO(): WebGLVertexArrayObject {
+    const gl = this.gl;
+    const vao = gl.createVertexArray()!;
+    gl.bindVertexArray(vao);
+    const buf = gl.createBuffer()!;
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+      -1, -1, 1, -1, -1, 1, 1, 1,
+    ]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.bindVertexArray(null);
+    return vao;
+  }
+
   createProgram(vertSrc: string, fragSrc: string): WebGLProgram {
     const gl = this.gl;
     const vert = gl.createShader(gl.VERTEX_SHADER)!;
     gl.shaderSource(vert, vertSrc);
     gl.compileShader(vert);
     if (!gl.getShaderParameter(vert, gl.COMPILE_STATUS))
-      throw new Error("vertex shader: " + gl.getShaderInfoLog(vert));
+      throw new Error(`vertex shader: ${gl.getShaderInfoLog(vert)}`);
 
     const frag = gl.createShader(gl.FRAGMENT_SHADER)!;
     gl.shaderSource(frag, fragSrc);
     gl.compileShader(frag);
     if (!gl.getShaderParameter(frag, gl.COMPILE_STATUS))
-      throw new Error("fragment shader: " + gl.getShaderInfoLog(frag));
+      throw new Error(`fragment shader: ${gl.getShaderInfoLog(frag)}`);
 
     const program = gl.createProgram()!;
     gl.attachShader(program, vert);
@@ -187,7 +196,7 @@ export class Renderer implements RendererContext {
     gl.bindAttribLocation(program, 0, "aPosition");
     gl.linkProgram(program);
     if (!gl.getProgramParameter(program, gl.LINK_STATUS))
-      throw new Error("program link: " + gl.getProgramInfoLog(program));
+      throw new Error(`program link: ${gl.getProgramInfoLog(program)}`);
 
     return program;
   }
@@ -232,7 +241,9 @@ export class Renderer implements RendererContext {
     gl.uniform2f(this.averageCellColors.uCanvasSize, this.canvasWidth, this.canvasHeight);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, srcTex);
+    gl.bindVertexArray(this.quadVAO);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindVertexArray(null);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.bindTexture(gl.TEXTURE_2D, null);
   }
@@ -241,6 +252,7 @@ export class Renderer implements RendererContext {
     const gl = this.gl;
     gl.useProgram(this.lumaRanges.program);
     gl.activeTexture(gl.TEXTURE0);
+    gl.bindVertexArray(this.quadVAO);
 
     let inputTexture = frame.cellTex;
     let inputW = this.cols, inputH = this.rows;
@@ -259,6 +271,7 @@ export class Renderer implements RendererContext {
       inputH = step.h;
     }
 
+    gl.bindVertexArray(null);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.bindTexture(gl.TEXTURE_2D, null);
   }

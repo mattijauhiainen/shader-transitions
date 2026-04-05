@@ -91,6 +91,7 @@ export function createCollapseTransition(ctx: RendererContext): Transition {
   const uMargin = gl.getUniformLocation(program, "uMargin")!;
   const uTime = gl.getUniformLocation(program, "uTime")!;
   const uOpacity = gl.getUniformLocation(program, "uOpacity")!;
+  const vao = ctx.createQuadVAO();
 
   const totalInstances = overscanCols * overscanRows;
   const visibleInstances = ctx.cols * ctx.rows;
@@ -135,6 +136,7 @@ export function createCollapseTransition(ctx: RendererContext): Transition {
 
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        gl.bindVertexArray(vao);
 
         gl.activeTexture(gl.TEXTURE2);
         gl.bindTexture(gl.TEXTURE_2D, visitMapTex);
@@ -164,6 +166,7 @@ export function createCollapseTransition(ctx: RendererContext): Transition {
         gl.activeTexture(gl.TEXTURE1);
         gl.bindTexture(gl.TEXTURE_2D, ctx.current.lumaRangeTex);
         gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, totalInstances);
+        gl.bindVertexArray(null);
         gl.disable(gl.BLEND);
       };
     },

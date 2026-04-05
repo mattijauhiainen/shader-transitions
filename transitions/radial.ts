@@ -20,6 +20,7 @@ export function createRadialTransition(ctx: RendererContext): Transition {
 
   const uTime = gl.getUniformLocation(program, "uTime")!;
   const uOrigin = gl.getUniformLocation(program, "uOrigin")!;
+  const vao = ctx.createQuadVAO();
 
   return {
     durationMs: 2500,
@@ -43,7 +44,9 @@ export function createRadialTransition(ctx: RendererContext): Transition {
         gl.bindTexture(gl.TEXTURE_2D, ctx.next.lumaRangeTex);
 
         gl.uniform1f(uTime, t);
+        gl.bindVertexArray(vao);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        gl.bindVertexArray(null);
       };
     },
   };

@@ -19,6 +19,7 @@ export function createWipeTransition(ctx: RendererContext): Transition {
   gl.useProgram(null);
 
   const uTime = gl.getUniformLocation(program, "uTime")!;
+  const vao = ctx.createQuadVAO();
 
   return {
     durationMs: 2500,
@@ -38,7 +39,9 @@ export function createWipeTransition(ctx: RendererContext): Transition {
       gl.bindTexture(gl.TEXTURE_2D, ctx.next.lumaRangeTex);
 
       gl.uniform1f(uTime, t);
+      gl.bindVertexArray(vao);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      gl.bindVertexArray(null);
     },
   };
 }

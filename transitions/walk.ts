@@ -24,6 +24,7 @@ export function createWalkTransition(ctx: RendererContext): Transition {
 
   const uTime = gl.getUniformLocation(program, "uTime")!;
   const uWindow = gl.getUniformLocation(program, "uWindow")!;
+  const vao = ctx.createQuadVAO();
 
   const visitMapTex = gl.createTexture()!;
   gl.bindTexture(gl.TEXTURE_2D, visitMapTex);
@@ -62,7 +63,9 @@ export function createWalkTransition(ctx: RendererContext): Transition {
         gl.uniform1f(uTime, t);
         gl.uniform1f(uWindow, WALK_WINDOW);
 
+        gl.bindVertexArray(vao);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        gl.bindVertexArray(null);
       };
     },
   };

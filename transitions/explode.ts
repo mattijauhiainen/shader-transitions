@@ -20,6 +20,7 @@ export function createExplodeTransition(ctx: RendererContext): Transition {
 
   const uTime = gl.getUniformLocation(program, "uTime")!;
   const uPhase = gl.getUniformLocation(program, "uPhase")!;
+  const vao = ctx.createQuadVAO();
 
   const totalInstances = ctx.cols * ctx.rows;
 
@@ -37,6 +38,7 @@ export function createExplodeTransition(ctx: RendererContext): Transition {
 
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      gl.bindVertexArray(vao);
 
       // Pass 1: draw B dots (fading in)
       gl.activeTexture(gl.TEXTURE0);
@@ -53,6 +55,7 @@ export function createExplodeTransition(ctx: RendererContext): Transition {
       gl.bindTexture(gl.TEXTURE_2D, ctx.current.lumaRangeTex);
       gl.uniform1i(uPhase, 0);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, totalInstances);
+      gl.bindVertexArray(null);
       gl.disable(gl.BLEND);
     },
   };
