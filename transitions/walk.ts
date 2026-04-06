@@ -1,9 +1,16 @@
-import fullscreenQuadVert from "../fullscreenQuad.vert.glsl" with { type: "text" };
+import fullscreenQuadVert from "../fullscreenQuad.vert.glsl" with {
+  type: "text",
+};
 import { LUMA } from "../luma.ts";
-import { CELL_SIZE, PITCH, type RendererContext, type Transition } from "../renderer.ts";
+import {
+  CELL_SIZE,
+  PITCH,
+  type RendererContext,
+  type Transition,
+} from "../renderer.ts";
 import fragSrc from "./walk.frag.glsl" with { type: "text" };
 
-const WALK_WINDOW = 0.10;
+const WALK_WINDOW = 0.1;
 const NUM_WALKERS = 24;
 
 export function createWalkTransition(ctx: RendererContext): Transition {
@@ -14,7 +21,12 @@ export function createWalkTransition(ctx: RendererContext): Transition {
   gl.uniform2f(gl.getUniformLocation(program, "uGridSize"), ctx.cols, ctx.rows);
   gl.uniform1f(gl.getUniformLocation(program, "uCellSize"), CELL_SIZE);
   gl.uniform1f(gl.getUniformLocation(program, "uPitch"), PITCH);
-  gl.uniform3f(gl.getUniformLocation(program, "uLuma"), LUMA[0], LUMA[1], LUMA[2]);
+  gl.uniform3f(
+    gl.getUniformLocation(program, "uLuma"),
+    LUMA[0],
+    LUMA[1],
+    LUMA[2],
+  );
   gl.uniform1i(gl.getUniformLocation(program, "uCellColorsA"), 0);
   gl.uniform1i(gl.getUniformLocation(program, "uLumaRangeA"), 1);
   gl.uniform1i(gl.getUniformLocation(program, "uCellColorsB"), 2);
@@ -39,7 +51,17 @@ export function createWalkTransition(ctx: RendererContext): Transition {
     prepareRender(_durationMs: number) {
       const visitTime = computeWalkMap(ctx.cols, ctx.rows);
       gl.bindTexture(gl.TEXTURE_2D, visitMapTex);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, ctx.cols, ctx.rows, 0, gl.RED, gl.FLOAT, visitTime);
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.R32F,
+        ctx.cols,
+        ctx.rows,
+        0,
+        gl.RED,
+        gl.FLOAT,
+        visitTime,
+      );
       gl.bindTexture(gl.TEXTURE_2D, null);
 
       return (t: number) => {
@@ -80,15 +102,15 @@ function computeWalkMap(cols: number, rows: number): Float32Array {
   let step = 0;
   let visitedCount = 0;
 
-  const gridCols = Math.round(Math.sqrt(NUM_WALKERS * cols / rows));
+  const gridCols = Math.round(Math.sqrt((NUM_WALKERS * cols) / rows));
   const gridRows = Math.ceil(NUM_WALKERS / gridCols);
   for (let i = 0; i < NUM_WALKERS; i++) {
     const gx = i % gridCols;
     const gy = Math.floor(i / gridCols);
-    const x0 = Math.floor(gx * cols / gridCols);
-    const x1 = Math.floor((gx + 1) * cols / gridCols);
-    const y0 = Math.floor(gy * rows / gridRows);
-    const y1 = Math.floor((gy + 1) * rows / gridRows);
+    const x0 = Math.floor((gx * cols) / gridCols);
+    const x1 = Math.floor(((gx + 1) * cols) / gridCols);
+    const y0 = Math.floor((gy * rows) / gridRows);
+    const y1 = Math.floor(((gy + 1) * rows) / gridRows);
     const x = x0 + Math.floor(Math.random() * (x1 - x0));
     const y = y0 + Math.floor(Math.random() * (y1 - y0));
     const idx = y * cols + x;
@@ -99,7 +121,12 @@ function computeWalkMap(cols: number, rows: number): Float32Array {
     walkerStacks.push([[x, y]]);
   }
 
-  const directions: [number, number][] = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+  const directions: [number, number][] = [
+    [0, 1],
+    [0, -1],
+    [1, 0],
+    [-1, 0],
+  ];
 
   while (visitedCount < totalCells) {
     step++;
@@ -108,8 +135,15 @@ function computeWalkMap(cols: number, rows: number): Float32Array {
         const [cx, cy] = stack[stack.length - 1];
         const neighbors: [number, number][] = [];
         for (const [dx, dy] of directions) {
-          const nx = cx + dx, ny = cy + dy;
-          if (nx >= 0 && nx < cols && ny >= 0 && ny < rows && visitTime[ny * cols + nx] < 0) {
+          const nx = cx + dx,
+            ny = cy + dy;
+          if (
+            nx >= 0 &&
+            nx < cols &&
+            ny >= 0 &&
+            ny < rows &&
+            visitTime[ny * cols + nx] < 0
+          ) {
             neighbors.push([nx, ny]);
           }
         }
@@ -139,7 +173,7 @@ function computeWalkMap(cols: number, rows: number): Float32Array {
 
   const maxStep = step;
   for (let i = 0; i < totalCells; i++) {
-    visitTime[i] = Math.max(0, visitTime[i]) / maxStep * (1 - WALK_WINDOW);
+    visitTime[i] = (Math.max(0, visitTime[i]) / maxStep) * (1 - WALK_WINDOW);
   }
 
   return visitTime;

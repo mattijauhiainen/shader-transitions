@@ -1,4 +1,6 @@
-import fullscreenQuadVert from "../fullscreenQuad.vert.glsl" with { type: "text" };
+import fullscreenQuadVert from "../fullscreenQuad.vert.glsl" with {
+  type: "text",
+};
 import { LUMA } from "../luma.ts";
 import {
   CELL_SIZE,
@@ -26,14 +28,15 @@ export function createMitosisTransition(ctx: RendererContext): Transition {
   const program = ctx.createProgram(fullscreenQuadVert, fragSrc);
 
   gl.useProgram(program);
-  gl.uniform2f(
-    gl.getUniformLocation(program, "uGridSize"),
-    ctx.cols,
-    ctx.rows,
-  );
+  gl.uniform2f(gl.getUniformLocation(program, "uGridSize"), ctx.cols, ctx.rows);
   gl.uniform1f(gl.getUniformLocation(program, "uCellSize"), CELL_SIZE);
   gl.uniform1f(gl.getUniformLocation(program, "uPitch"), PITCH);
-  gl.uniform3f(gl.getUniformLocation(program, "uLuma"), LUMA[0], LUMA[1], LUMA[2]);
+  gl.uniform3f(
+    gl.getUniformLocation(program, "uLuma"),
+    LUMA[0],
+    LUMA[1],
+    LUMA[2],
+  );
   gl.uniform1i(gl.getUniformLocation(program, "uPeakLevel"), peakLevel);
   gl.uniform1i(gl.getUniformLocation(program, "uTotalLevels"), totalLevels);
   gl.uniform1i(gl.getUniformLocation(program, "uCellColorsA"), 0);
@@ -265,12 +268,13 @@ function generateMergeMaps(
 
         let delay = 0;
         if (level === 0) {
-          delay = valueNoise(
-            groupCol,
-            groupRow,
-            Math.max(groupCols, groupRows) / 3,
-            seed,
-          ) * 2;
+          delay =
+            valueNoise(
+              groupCol,
+              groupRow,
+              Math.max(groupCols, groupRows) / 3,
+              seed,
+            ) * 2;
         }
 
         groupStarts[groupIndex] = earliest + delay;
@@ -285,7 +289,8 @@ function generateMergeMaps(
       for (let col = 0; col < cols; col++) {
         const groupCol = Math.min(Math.floor(col / scale), groupCols - 1);
         const groupRow = Math.min(Math.floor(row / scale), groupRows - 1);
-        startMap[row * cols + col] = groupStarts[groupRow * groupCols + groupCol];
+        startMap[row * cols + col] =
+          groupStarts[groupRow * groupCols + groupCol];
       }
     }
     result.push(startMap);
@@ -355,7 +360,8 @@ function generateDescentMergeMaps(
         // last cell to merge in the forward map, fwdStart[i] +
         // LEVEL_DURATION === maxEnd, and we get zero, making
         // this the first cell to start its animation.
-        maxEnd - (fwdStart[i] + LEVEL_DURATION);
+        maxEnd -
+        (fwdStart[i] + LEVEL_DURATION);
     }
     result.push(start);
   }
@@ -422,12 +428,7 @@ function packMergeTexture(
 }
 
 // Value noise: smooth random field sampled at (x, y) with given frequency
-function valueNoise(
-  x: number,
-  y: number,
-  freq: number,
-  seed: number,
-): number {
+function valueNoise(x: number, y: number, freq: number, seed: number): number {
   const fx = x / freq;
   const fy = y / freq;
   const ix = Math.floor(fx);

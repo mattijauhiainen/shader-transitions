@@ -1,4 +1,4 @@
-import { readdirSync, mkdirSync, cpSync } from "fs";
+import { cpSync, mkdirSync, readdirSync } from "node:fs";
 
 const OUT = "./dist";
 
@@ -25,4 +25,6 @@ const images = readdirSync("./images")
   .map((f) => `/images/${f}`);
 await Bun.write(`${OUT}/images.json`, JSON.stringify(images));
 
-console.log(`Built ${result.outputs.length} bundle(s), ${images.length} images`);
+console.log(
+  `Built ${result.outputs.length} bundle(s), ${images.length} images`,
+);

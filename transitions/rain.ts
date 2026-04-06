@@ -1,5 +1,10 @@
 import { LUMA } from "../luma.ts";
-import { CELL_SIZE, PITCH, type RendererContext, type Transition } from "../renderer.ts";
+import {
+  CELL_SIZE,
+  PITCH,
+  type RendererContext,
+  type Transition,
+} from "../renderer.ts";
 import fragSrc from "./rain.frag.glsl" with { type: "text" };
 import vertSrc from "./rain.vert.glsl" with { type: "text" };
 
@@ -15,15 +20,35 @@ function invNormCDF(u: number): number {
   let r: number;
   if (Math.abs(x) < 0.42) {
     r = x * x;
-    x = x * ((((-25.44106049637 * r + 41.39119773534) * r - 18.61500062529) * r + 2.50662823884) /
-      ((((3.13082909833 * r - 21.06224101826) * r + 23.08336743743) * r - 8.47351093090) * r + 1));
+    x =
+      x *
+      ((((-25.44106049637 * r + 41.39119773534) * r - 18.61500062529) * r +
+        2.50662823884) /
+        ((((3.13082909833 * r - 21.06224101826) * r + 23.08336743743) * r -
+          8.4735109309) *
+          r +
+          1));
   } else {
     r = u;
     if (x > 0) r = 1 - u;
     r = Math.log(-Math.log(r));
-    x = 0.3374754822726147 + r * (0.9761690190917186 + r * (0.1607979714918209 +
-      r * (0.0276438810333863 + r * (0.0038405729373609 + r * (0.0003951896511919 +
-        r * (0.0000321767881768 + r * (0.0000002888167364 + r * 0.0000003960315187)))))));
+    x =
+      0.3374754822726147 +
+      r *
+        (0.9761690190917186 +
+          r *
+            (0.1607979714918209 +
+              r *
+                (0.0276438810333863 +
+                  r *
+                    (0.0038405729373609 +
+                      r *
+                        (0.0003951896511919 +
+                          r *
+                            (0.0000321767881768 +
+                              r *
+                                (0.0000002888167364 +
+                                  r * 0.0000003960315187)))))));
     if (u < 0.5) x = -x;
   }
   return 0.5 + x * SIGMA;
@@ -32,9 +57,18 @@ function invNormCDF(u: number): number {
 // Diamond offsets: all cells within Manhattan distance 2 (13 cells)
 const BLAST_OFFSETS = [
   [0, 0],
-  [-1, 0], [1, 0], [0, -1], [0, 1],
-  [-2, 0], [2, 0], [0, -2], [0, 2],
-  [-1, -1], [1, -1], [-1, 1], [1, 1],
+  [-1, 0],
+  [1, 0],
+  [0, -1],
+  [0, 1],
+  [-2, 0],
+  [2, 0],
+  [0, -2],
+  [0, 2],
+  [-1, -1],
+  [1, -1],
+  [-1, 1],
+  [1, 1],
 ];
 
 /*
@@ -86,8 +120,14 @@ function generateDropMap(cols: number, rows: number): Float32Array {
 
     // Cover diamond-shape neighbors
     for (const [dx, dy] of BLAST_OFFSETS) {
-      const neighborCol = centerCol + dx, neighborRow = centerRow + dy;
-      if (neighborCol >= 0 && neighborCol < cols && neighborRow >= 0 && neighborRow < rows) {
+      const neighborCol = centerCol + dx,
+        neighborRow = centerRow + dy;
+      if (
+        neighborCol >= 0 &&
+        neighborCol < cols &&
+        neighborRow >= 0 &&
+        neighborRow < rows
+      ) {
         const neighborIdx = neighborRow * cols + neighborCol;
         if (!covered[neighborIdx]) {
           covered[neighborIdx] = 1;
@@ -96,7 +136,6 @@ function generateDropMap(cols: number, rows: number): Float32Array {
       }
     }
   }
-
 
   // Create random order for centers to fall in
   const order = Float32Array.from({ length: centers.length }, (_, i) => i);
@@ -119,8 +158,9 @@ function generateDropMap(cols: number, rows: number): Float32Array {
     // and last 0.1% of cells on our curve, and redistribute them towards the middle.
     const tailThreshold = 0.001;
     if (normalizedTime < tailThreshold || normalizedTime > 1 - tailThreshold) {
-      const r1 = Math.random(), r2 = Math.random();
-      normalizedTime = 0.3 + 0.4 * (r1 + r2) / 2;
+      const r1 = Math.random(),
+        r2 = Math.random();
+      normalizedTime = 0.3 + (0.4 * (r1 + r2)) / 2;
     }
     // Instead of normalizing between (0..1) normalize between (FALL_WINDOW..1 - FALL_WINDOW)
     // to give cells time to finish their animations.
@@ -145,8 +185,14 @@ function generateDropMap(cols: number, rows: number): Float32Array {
 
     // Assign release time and distance for centers neighbors
     for (const [dx, dy] of BLAST_OFFSETS) {
-      const neighborCol = centerCol + dx, neighborRow = centerRow + dy;
-      if (neighborCol >= 0 && neighborCol < cols && neighborRow >= 0 && neighborRow < rows) {
+      const neighborCol = centerCol + dx,
+        neighborRow = centerRow + dy;
+      if (
+        neighborCol >= 0 &&
+        neighborCol < cols &&
+        neighborRow >= 0 &&
+        neighborRow < rows
+      ) {
         const neighborIdx = neighborRow * cols + neighborCol;
         if (!assigned[neighborIdx]) {
           result[neighborIdx * 2] = releaseTime;
@@ -168,10 +214,19 @@ export function createRainTransition(ctx: RendererContext): Transition {
   // Cache uniform locations
   gl.useProgram(program);
   gl.uniform2f(gl.getUniformLocation(program, "uGridSize"), ctx.cols, ctx.rows);
-  gl.uniform2f(gl.getUniformLocation(program, "uViewportPx"), ctx.canvasWidth, ctx.canvasHeight);
+  gl.uniform2f(
+    gl.getUniformLocation(program, "uViewportPx"),
+    ctx.canvasWidth,
+    ctx.canvasHeight,
+  );
   gl.uniform1f(gl.getUniformLocation(program, "uCellSize"), CELL_SIZE);
   gl.uniform1f(gl.getUniformLocation(program, "uPitch"), PITCH);
-  gl.uniform3f(gl.getUniformLocation(program, "uLuma"), LUMA[0], LUMA[1], LUMA[2]);
+  gl.uniform3f(
+    gl.getUniformLocation(program, "uLuma"),
+    LUMA[0],
+    LUMA[1],
+    LUMA[2],
+  );
   gl.uniform1f(gl.getUniformLocation(program, "uFallWindow"), FALL_WINDOW);
   gl.uniform1i(gl.getUniformLocation(program, "uCellColors"), 0);
   gl.uniform1i(gl.getUniformLocation(program, "uLumaRange"), 1);
@@ -187,7 +242,17 @@ export function createRainTransition(ctx: RendererContext): Transition {
 
   const dropMapTex = gl.createTexture()!;
   gl.bindTexture(gl.TEXTURE_2D, dropMapTex);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, ctx.cols, ctx.rows, 0, gl.RG, gl.FLOAT, dropMapData);
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0,
+    gl.RG32F,
+    ctx.cols,
+    ctx.rows,
+    0,
+    gl.RG,
+    gl.FLOAT,
+    dropMapData,
+  );
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
   gl.bindTexture(gl.TEXTURE_2D, null);

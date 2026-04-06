@@ -1,6 +1,11 @@
 import { easeIn } from "../easeIn.ts";
 import { LUMA } from "../luma.ts";
-import { CELL_SIZE, PITCH, type RendererContext, type Transition } from "../renderer.ts";
+import {
+  CELL_SIZE,
+  PITCH,
+  type RendererContext,
+  type Transition,
+} from "../renderer.ts";
 import fragSrc from "./pageflip.frag.glsl" with { type: "text" };
 import vertSrc from "./pageflip.vert.glsl" with { type: "text" };
 
@@ -11,10 +16,19 @@ export function createPageflipTransition(ctx: RendererContext): Transition {
 
   gl.useProgram(program);
   gl.uniform2f(gl.getUniformLocation(program, "uGridSize"), ctx.cols, ctx.rows);
-  gl.uniform2f(gl.getUniformLocation(program, "uViewport"), ctx.canvasWidth, ctx.canvasHeight);
+  gl.uniform2f(
+    gl.getUniformLocation(program, "uViewport"),
+    ctx.canvasWidth,
+    ctx.canvasHeight,
+  );
   gl.uniform1f(gl.getUniformLocation(program, "uCellSize"), CELL_SIZE);
   gl.uniform1f(gl.getUniformLocation(program, "uPitch"), PITCH);
-  gl.uniform3f(gl.getUniformLocation(program, "uLuma"), LUMA[0], LUMA[1], LUMA[2]);
+  gl.uniform3f(
+    gl.getUniformLocation(program, "uLuma"),
+    LUMA[0],
+    LUMA[1],
+    LUMA[2],
+  );
   gl.uniform1i(gl.getUniformLocation(program, "uCellColors"), 0);
   gl.uniform1i(gl.getUniformLocation(program, "uLumaRange"), 1);
   gl.useProgram(null);

@@ -43,10 +43,11 @@ try {
     }
   }
 
-  const paths: string[] = await fetch("/images.json").then(r => r.json());
+  const paths: string[] = await fetch("/images.json").then((r) => r.json());
   runSlideshow(paths);
 } catch (e) {
-  document.body.style.cssText = "color:red;padding:2em;font-family:monospace;white-space:pre-wrap";
+  document.body.style.cssText =
+    "color:red;padding:2em;font-family:monospace;white-space:pre-wrap";
   document.body.textContent = String(e);
   throw e;
 }

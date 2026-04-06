@@ -1,6 +1,13 @@
-import fullscreenQuadVert from "../fullscreenQuad.vert.glsl" with { type: "text" };
+import fullscreenQuadVert from "../fullscreenQuad.vert.glsl" with {
+  type: "text",
+};
 import { LUMA } from "../luma.ts";
-import { CELL_SIZE, PITCH, type RendererContext, type Transition } from "../renderer.ts";
+import {
+  CELL_SIZE,
+  PITCH,
+  type RendererContext,
+  type Transition,
+} from "../renderer.ts";
 import fragSrc from "./wipe.frag.glsl" with { type: "text" };
 
 export function createWipeTransition(ctx: RendererContext): Transition {
@@ -11,7 +18,12 @@ export function createWipeTransition(ctx: RendererContext): Transition {
   gl.uniform2f(gl.getUniformLocation(program, "uGridSize"), ctx.cols, ctx.rows);
   gl.uniform1f(gl.getUniformLocation(program, "uCellSize"), CELL_SIZE);
   gl.uniform1f(gl.getUniformLocation(program, "uPitch"), PITCH);
-  gl.uniform3f(gl.getUniformLocation(program, "uLuma"), LUMA[0], LUMA[1], LUMA[2]);
+  gl.uniform3f(
+    gl.getUniformLocation(program, "uLuma"),
+    LUMA[0],
+    LUMA[1],
+    LUMA[2],
+  );
   gl.uniform1i(gl.getUniformLocation(program, "uCellColorsA"), 0);
   gl.uniform1i(gl.getUniformLocation(program, "uLumaRangeA"), 1);
   gl.uniform1i(gl.getUniformLocation(program, "uCellColorsB"), 2);

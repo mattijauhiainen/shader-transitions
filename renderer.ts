@@ -1,16 +1,20 @@
-import fullscreenQuadVert from "./fullscreenQuad.vert.glsl" with { type: "text" };
-import averageCellColorsFrag from "./averageCellColors.frag.glsl" with { type: "text" };
-import lumaRangesFrag from "./lumaRanges.frag.glsl" with { type: "text" };
+import averageCellColorsFrag from "./averageCellColors.frag.glsl" with {
+  type: "text",
+};
+import fullscreenQuadVert from "./fullscreenQuad.vert.glsl" with {
+  type: "text",
+};
 import { LUMA } from "./luma.ts";
+import lumaRangesFrag from "./lumaRanges.frag.glsl" with { type: "text" };
 import { createCollapseTransition } from "./transitions/collapse.ts";
 import { createExplodeTransition } from "./transitions/explode.ts";
+import { createFlipTransition } from "./transitions/flip.ts";
 import { createMitosisTransition } from "./transitions/mitosis.ts";
 import { createPageflipTransition } from "./transitions/pageflip.ts";
 import { createRadialTransition } from "./transitions/radial.ts";
 import { createRainTransition } from "./transitions/rain.ts";
 import { createShrinkTransition } from "./transitions/shrink.ts";
 import { createWalkTransition } from "./transitions/walk.ts";
-import { createFlipTransition } from "./transitions/flip.ts";
 import { createWipeTransition } from "./transitions/wipe.ts";
 
 export const CELL_SIZE = 5.0;
@@ -20,7 +24,12 @@ export interface HalftoneFrame {
   cellTex: WebGLTexture;
   cellFbo: WebGLFramebuffer;
   lumaRangeTex: WebGLTexture;
-  reduceSteps: { texture: WebGLTexture; fbo: WebGLFramebuffer; w: number; h: number }[];
+  reduceSteps: {
+    texture: WebGLTexture;
+    fbo: WebGLFramebuffer;
+    w: number;
+    h: number;
+  }[];
 }
 
 export interface RendererContext {
@@ -62,19 +71,22 @@ export class Renderer implements RendererContext {
   private _transitions: Transition[];
   private quadVAO: WebGLVertexArrayObject;
 
-  get current(): HalftoneFrame { return this._current; }
-  get next(): HalftoneFrame { return this._next; }
+  get current(): HalftoneFrame {
+    return this._current;
+  }
+  get next(): HalftoneFrame {
+    return this._next;
+  }
 
   constructor(
     readonly gl: WebGL2RenderingContext,
     width: number,
-    height: number
+    height: number,
   ) {
     this.canvasWidth = width;
     this.canvasHeight = height;
     this.cols = Math.ceil(width / PITCH);
     this.rows = Math.ceil(height / PITCH);
-
 
     this.quadVAO = this.createQuadVAO();
 
@@ -102,11 +114,26 @@ export class Renderer implements RendererContext {
     const srcTex = this.gl.createTexture()!;
     this.gl.bindTexture(this.gl.TEXTURE_2D, srcTex);
     this.gl.pixelStorei(this.gl.UNPACK_FLIP_Y_WEBGL, true);
-    this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, img);
+    this.gl.texImage2D(
+      this.gl.TEXTURE_2D,
+      0,
+      this.gl.RGBA,
+      this.gl.RGBA,
+      this.gl.UNSIGNED_BYTE,
+      img,
+    );
     this.gl.pixelStorei(this.gl.UNPACK_FLIP_Y_WEBGL, false);
     this.gl.generateMipmap(this.gl.TEXTURE_2D);
-    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR_MIPMAP_LINEAR);
-    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
+    this.gl.texParameteri(
+      this.gl.TEXTURE_2D,
+      this.gl.TEXTURE_MIN_FILTER,
+      this.gl.LINEAR_MIPMAP_LINEAR,
+    );
+    this.gl.texParameteri(
+      this.gl.TEXTURE_2D,
+      this.gl.TEXTURE_MAG_FILTER,
+      this.gl.LINEAR,
+    );
     this.gl.bindTexture(this.gl.TEXTURE_2D, null);
     return srcTex;
   }
@@ -126,37 +153,69 @@ export class Renderer implements RendererContext {
     return this._transitions;
   }
 
-  private createTextureAndFBO(w: number, h: number): { texture: WebGLTexture; fbo: WebGLFramebuffer } {
+  private createTextureAndFBO(
+    w: number,
+    h: number,
+  ): { texture: WebGLTexture; fbo: WebGLFramebuffer } {
     const gl = this.gl;
     const texture = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA,
+      w,
+      h,
+      0,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      null,
+    );
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.bindTexture(gl.TEXTURE_2D, null);
 
     const fbo = gl.createFramebuffer()!;
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+    gl.framebufferTexture2D(
+      gl.FRAMEBUFFER,
+      gl.COLOR_ATTACHMENT0,
+      gl.TEXTURE_2D,
+      texture,
+      0,
+    );
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
     return { texture, fbo };
   }
 
   private createHalftoneFrame(): HalftoneFrame {
-    const { texture: cellTex, fbo: cellFbo } = this.createTextureAndFBO(this.cols, this.rows);
+    const { texture: cellTex, fbo: cellFbo } = this.createTextureAndFBO(
+      this.cols,
+      this.rows,
+    );
 
     const sizes: [number, number][] = [];
-    let w = this.cols, h = this.rows;
+    let w = this.cols,
+      h = this.rows;
     while (w > 1 || h > 1) {
       w = Math.max(1, Math.ceil(w / 2));
       h = Math.max(1, Math.ceil(h / 2));
       sizes.push([w, h]);
     }
 
-    const reduceSteps = sizes.map(([w, h]) => ({ ...this.createTextureAndFBO(w, h), w, h }));
+    const reduceSteps = sizes.map(([w, h]) => ({
+      ...this.createTextureAndFBO(w, h),
+      w,
+      h,
+    }));
 
-    return { cellTex, cellFbo, lumaRangeTex: reduceSteps[reduceSteps.length - 1].texture, reduceSteps };
+    return {
+      cellTex,
+      cellFbo,
+      lumaRangeTex: reduceSteps[reduceSteps.length - 1].texture,
+      reduceSteps,
+    };
   }
 
   // Creates a Vertex array object with a quad (two triangles,
@@ -167,9 +226,11 @@ export class Renderer implements RendererContext {
     gl.bindVertexArray(vao);
     const buf = gl.createBuffer()!;
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-      -1, -1, 1, -1, -1, 1, 1, 1,
-    ]), gl.STATIC_DRAW);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
+      gl.STATIC_DRAW,
+    );
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     gl.bindVertexArray(null);
@@ -203,7 +264,10 @@ export class Renderer implements RendererContext {
 
   private setupAverageCellColors() {
     const gl = this.gl;
-    const program = this.createProgram(fullscreenQuadVert, averageCellColorsFrag);
+    const program = this.createProgram(
+      fullscreenQuadVert,
+      averageCellColorsFrag,
+    );
 
     gl.useProgram(program);
     gl.uniform1i(gl.getUniformLocation(program, "uTexture"), 0);
@@ -222,7 +286,12 @@ export class Renderer implements RendererContext {
 
     gl.useProgram(program);
     gl.uniform1i(gl.getUniformLocation(program, "uTexture"), 0);
-    gl.uniform3f(gl.getUniformLocation(program, "uLuma"), LUMA[0], LUMA[1], LUMA[2]);
+    gl.uniform3f(
+      gl.getUniformLocation(program, "uLuma"),
+      LUMA[0],
+      LUMA[1],
+      LUMA[2],
+    );
     gl.useProgram(null);
 
     return {
@@ -232,13 +301,21 @@ export class Renderer implements RendererContext {
     };
   }
 
-  private runAverageCellColors(srcTex: WebGLTexture, img: HTMLImageElement, frame: HalftoneFrame): void {
+  private runAverageCellColors(
+    srcTex: WebGLTexture,
+    img: HTMLImageElement,
+    frame: HalftoneFrame,
+  ): void {
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, frame.cellFbo);
     gl.viewport(0, 0, this.cols, this.rows);
     gl.useProgram(this.averageCellColors.program);
     gl.uniform2f(this.averageCellColors.uImageSize, img.width, img.height);
-    gl.uniform2f(this.averageCellColors.uCanvasSize, this.canvasWidth, this.canvasHeight);
+    gl.uniform2f(
+      this.averageCellColors.uCanvasSize,
+      this.canvasWidth,
+      this.canvasHeight,
+    );
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, srcTex);
     gl.bindVertexArray(this.quadVAO);
@@ -255,7 +332,8 @@ export class Renderer implements RendererContext {
     gl.bindVertexArray(this.quadVAO);
 
     let inputTexture = frame.cellTex;
-    let inputW = this.cols, inputH = this.rows;
+    let inputW = this.cols,
+      inputH = this.rows;
 
     for (let i = 0; i < frame.reduceSteps.length; i++) {
       const step = frame.reduceSteps[i];

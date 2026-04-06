@@ -1,5 +1,10 @@
 import { LUMA } from "../luma.ts";
-import { CELL_SIZE, PITCH, type RendererContext, type Transition } from "../renderer.ts";
+import {
+  CELL_SIZE,
+  PITCH,
+  type RendererContext,
+  type Transition,
+} from "../renderer.ts";
 import fragSrc from "./collapse.frag.glsl" with { type: "text" };
 import vertSrc from "./collapse.vert.glsl" with { type: "text" };
 
@@ -58,7 +63,8 @@ function generateVisitOrder(cols: number, rows: number): Float32Array {
   for (let screenRow = 0; screenRow < rows; screenRow++) {
     const glRow = rows - 1 - screenRow;
     for (let col = 0; col < cols; col++) {
-      result[glRow * cols + col] = visitTime[screenRow * cols + col] * VISIT_TIME_MAX;
+      result[glRow * cols + col] =
+        visitTime[screenRow * cols + col] * VISIT_TIME_MAX;
     }
   }
   return result;
@@ -78,10 +84,19 @@ export function createCollapseTransition(ctx: RendererContext): Transition {
   // Cache all uniform locations at setup time
   gl.useProgram(program);
   gl.uniform2f(gl.getUniformLocation(program, "uGridSize"), ctx.cols, ctx.rows);
-  gl.uniform2f(gl.getUniformLocation(program, "uViewport"), ctx.canvasWidth, ctx.canvasHeight);
+  gl.uniform2f(
+    gl.getUniformLocation(program, "uViewport"),
+    ctx.canvasWidth,
+    ctx.canvasHeight,
+  );
   gl.uniform1f(gl.getUniformLocation(program, "uCellSize"), CELL_SIZE);
   gl.uniform1f(gl.getUniformLocation(program, "uPitch"), PITCH);
-  gl.uniform3f(gl.getUniformLocation(program, "uLuma"), LUMA[0], LUMA[1], LUMA[2]);
+  gl.uniform3f(
+    gl.getUniformLocation(program, "uLuma"),
+    LUMA[0],
+    LUMA[1],
+    LUMA[2],
+  );
   gl.uniform1i(gl.getUniformLocation(program, "uCellColors"), 0);
   gl.uniform1i(gl.getUniformLocation(program, "uLumaRange"), 1);
   gl.uniform1i(gl.getUniformLocation(program, "uVisitMap"), 2);
@@ -100,7 +115,17 @@ export function createCollapseTransition(ctx: RendererContext): Transition {
   // Allocate visit map texture (data uploaded in prepareRender)
   const visitMapTex = gl.createTexture()!;
   gl.bindTexture(gl.TEXTURE_2D, visitMapTex);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, overscanCols, overscanRows, 0, gl.RED, gl.FLOAT, null);
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0,
+    gl.R32F,
+    overscanCols,
+    overscanRows,
+    0,
+    gl.RED,
+    gl.FLOAT,
+    null,
+  );
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
   gl.bindTexture(gl.TEXTURE_2D, null);
@@ -122,7 +147,17 @@ export function createCollapseTransition(ctx: RendererContext): Transition {
         scaledVisitOrder[i] = curved * releaseSpan;
       }
       gl.bindTexture(gl.TEXTURE_2D, visitMapTex);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, overscanCols, overscanRows, 0, gl.RED, gl.FLOAT, scaledVisitOrder);
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.R32F,
+        overscanCols,
+        overscanRows,
+        0,
+        gl.RED,
+        gl.FLOAT,
+        scaledVisitOrder,
+      );
       gl.bindTexture(gl.TEXTURE_2D, null);
 
       return (t: number) => {

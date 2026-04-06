@@ -1,4 +1,4 @@
-import { readdirSync } from "fs";
+import { readdirSync } from "node:fs";
 
 // Generate images.json for dev
 const images = readdirSync("./images")
@@ -44,7 +44,7 @@ const server = Bun.serve({
     const ext = path.substring(path.lastIndexOf("."));
     const contentType = CONTENT_TYPES[ext];
     const file = Bun.file(`.${path}`);
-    if (contentType && await file.exists()) {
+    if (contentType && (await file.exists())) {
       return new Response(file, {
         headers: { "Content-Type": contentType },
       });
