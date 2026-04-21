@@ -2,40 +2,40 @@
 precision highp float;
 
 // Per-cell average colors for current (A) and next (B) frames
-uniform sampler2D uCellColorsA;
-uniform sampler2D uLumaRangeA;   // .r = min luma, .g = max luma
-uniform sampler2D uCellColorsB;
-uniform sampler2D uLumaRangeB;
+uniform sampler2D uCELL_COLORS_A;
+uniform sampler2D uLUMA_RANGE_A;   // .r = min luma, .g = max luma
+uniform sampler2D uCELL_COLORS_B;
+uniform sampler2D uLUMA_RANGE_B;
 
-uniform vec2 uGridSize;         // grid dimensions (cols, rows)
+uniform vec2 uGRID_SIZE;         // grid dimensions (cols, rows)
 
-uniform float uCellSize;
-uniform float uPitch;
-uniform vec3 uLuma;
+uniform float uCELL_SIZE;
+uniform float uPITCH;
+uniform vec3 uLUMA;
 uniform float uTime;                // transition progress 0..1
 in vec2 vUV;
 out vec4 fragColor;
 
 void main() {
   // Grid helpers
-  vec2 cellCoord = floor(gl_FragCoord.xy / uPitch);
-  vec2 cellCenter = (cellCoord + 0.5) * uPitch;
-  vec2 uv = (cellCoord + 0.5) / uGridSize;
+  vec2 cellCoord = floor(gl_FragCoord.xy / uPITCH);
+  vec2 cellCenter = (cellCoord + 0.5) * uPITCH;
+  vec2 uv = (cellCoord + 0.5) / uGRID_SIZE;
   float dist = length(gl_FragCoord.xy - cellCenter);
 
   // Current frame (A)
-  vec4 colorA = texture(uCellColorsA, uv);
-  vec2 rangeA = texture(uLumaRangeA, vec2(0.5)).rg;
-  float normA = (dot(colorA.rgb, uLuma) - rangeA.r) / (rangeA.g - rangeA.r);
+  vec4 colorA = texture(uCELL_COLORS_A, uv);
+  vec2 rangeA = texture(uLUMA_RANGE_A, vec2(0.5)).rg;
+  float normA = (dot(colorA.rgb, uLUMA) - rangeA.r) / (rangeA.g - rangeA.r);
 
   // Next frame (B)
-  vec4 colorB = texture(uCellColorsB, uv);
-  vec2 rangeB = texture(uLumaRangeB, vec2(0.5)).rg;
-  float normB = (dot(colorB.rgb, uLuma) - rangeB.r) / (rangeB.g - rangeB.r);
+  vec4 colorB = texture(uCELL_COLORS_B, uv);
+  vec2 rangeB = texture(uLUMA_RANGE_B, vec2(0.5)).rg;
+  float normB = (dot(colorB.rgb, uLUMA) - rangeB.r) / (rangeB.g - rangeB.r);
 
   // Natural radii for each frame
-  float rA = sqrt(normA) * uCellSize * 0.5;
-  float rB = sqrt(normB) * uCellSize * 0.5;
+  float rA = sqrt(normA) * uCELL_SIZE * 0.5;
+  float rB = sqrt(normB) * uCELL_SIZE * 0.5;
 
   // Interpolate between radii with overshoot
   float t = uTime;

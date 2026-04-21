@@ -11,32 +11,32 @@ precision highp float;
 //   mergeT     — merge progress within the current level (0→1 ascent, 1→0 descent)
 //   colorBlend — which frame's colors to use (0 = A, 1 = B)
 
-uniform sampler2D uCellColorsA;
-uniform sampler2D uLumaRangeA;
-uniform sampler2D uCellColorsB;
-uniform sampler2D uLumaRangeB;
-uniform sampler2D uMergeTimes;
-uniform vec2 uGridSize;
+uniform sampler2D uCELL_COLORS_A;
+uniform sampler2D uLUMA_RANGE_A;
+uniform sampler2D uCELL_COLORS_B;
+uniform sampler2D uLUMA_RANGE_B;
+uniform sampler2D uMERGE_TIMES;
+uniform vec2 uGRID_SIZE;
 uniform float uTime;
 uniform float uLevelDuration;
 
-uniform float uCellSize;
-uniform float uPitch;
-uniform vec3 uLuma;
+uniform float uCELL_SIZE;
+uniform float uPITCH;
+uniform vec3 uLUMA;
 // Number of ascent levels. Also the boundary in the timing texture
-// between ascent (steps 0..uPeakLevel-1) and descent (steps
-// uPeakLevel..uTotalLevels-1). Between the two phases, a crossfade
+// between ascent (steps 0..uPEAK_LEVEL-1) and descent (steps
+// uPEAK_LEVEL..uTOTAL_LEVELS-1). Between the two phases, a crossfade
 // blends A→B colors while dots hold at the peak.
-uniform int uPeakLevel;
+uniform int uPEAK_LEVEL;
 // How many levels (both ascending and descending) we have in the
 // texture
-uniform int uTotalLevels;
+uniform int uTOTAL_LEVELS;
 
 out vec4 fragColor;
 
 void main() {
-  vec2 baseCell = floor(gl_FragCoord.xy / uPitch);
-  vec2 cellUV = (baseCell + 0.5) / uGridSize;
+  vec2 baseCell = floor(gl_FragCoord.xy / uPITCH);
+  vec2 cellUV = (baseCell + 0.5) / uGRID_SIZE;
 
   float level = 0.0;
   float mergeT = 0.0;
@@ -44,24 +44,24 @@ void main() {
 
   /*
    * Walk the merge timing texture to find the current animation state.
-   * The first uPeakLevel entries are ascent (A-frame merging up), the
-   * next uPeakLevel are descent (B-frame splitting down). We scan until
+   * The first uPEAK_LEVEL entries are ascent (A-frame merging up), the
+   * next uPEAK_LEVEL are descent (B-frame splitting down). We scan until
    * we find the active step, setting level, mergeT, and colorBlend.
    */
-  for (int step = 0; step < uTotalLevels; step++) {
-    float texY = (cellUV.y + float(step)) / float(uTotalLevels);
-    float startTime = texture(uMergeTimes, vec2(cellUV.x, texY)).r;
+  for (int step = 0; step < uTOTAL_LEVELS; step++) {
+    float texY = (cellUV.y + float(step)) / float(uTOTAL_LEVELS);
+    float startTime = texture(uMERGE_TIMES, vec2(cellUV.x, texY)).r;
     float endTime = startTime + uLevelDuration;
 
     // Extract different animation states into conditions to make the
     // loop less painful to read
     bool notStarted = step == 0 && uTime < startTime;
-    bool ascending = step < uPeakLevel;
+    bool ascending = step < uPEAK_LEVEL;
     bool belowThisLevel = uTime < startTime;
     bool pastThisLevel = uTime >= endTime;
     bool onThisLevel = !belowThisLevel && !pastThisLevel;
-    bool crossfading = step == uPeakLevel && belowThisLevel;
-    bool isLastLevel = step == uTotalLevels - 1;
+    bool crossfading = step == uPEAK_LEVEL && belowThisLevel;
+    bool isLastLevel = step == uTOTAL_LEVELS - 1;
 
     if (notStarted) {
       // Animation hasn't started yet — keep defaults (level=0, mergeT=0)
@@ -83,9 +83,9 @@ void main() {
     } else if (crossfading) {
       // Ascent complete, descent hasn't started yet.
       // Look back at the last ascent step to get when it ended.
-      float ascentTexY = (cellUV.y + float(uPeakLevel - 1)) / float(uTotalLevels);
-      float ascentEnd = texture(uMergeTimes, vec2(cellUV.x, ascentTexY)).r + uLevelDuration;
-      level = float(uPeakLevel) - 1.0;
+      float ascentTexY = (cellUV.y + float(uPEAK_LEVEL - 1)) / float(uTOTAL_LEVELS);
+      float ascentEnd = texture(uMERGE_TIMES, vec2(cellUV.x, ascentTexY)).r + uLevelDuration;
+      level = float(uPEAK_LEVEL) - 1.0;
       mergeT = 1.0;
       colorBlend = clamp(
         (uTime - ascentEnd) / max(startTime - ascentEnd, 0.001),
@@ -95,7 +95,7 @@ void main() {
     // --- Descent ---
     } else if (!ascending && onThisLevel) {
       // Descent: in progress
-      level = float(uPeakLevel - 1 - (step - uPeakLevel));
+      level = float(uPEAK_LEVEL - 1 - (step - uPEAK_LEVEL));
       mergeT = 1.0 - (uTime - startTime) / uLevelDuration;
       colorBlend = 1.0;
       break;
@@ -104,7 +104,7 @@ void main() {
     } else if (!ascending && belowThisLevel) {
       // Waiting for a sibling group to finish splitting.
       // Previous step completed, so set state for that step.
-      level = float(2 * uPeakLevel - step);
+      level = float(2 * uPEAK_LEVEL - step);
       mergeT = 0.0;
       colorBlend = 1.0;
       break;
@@ -144,30 +144,30 @@ void main() {
    */
   // --- Stage 1: Grid geometry ---
   // Luma range for normalizing brightness (blend A/B ranges by colorBlend)
-  vec2 lumaRangeA = texture(uLumaRangeA, vec2(0.5)).rg;
-  vec2 lumaRangeB = texture(uLumaRangeB, vec2(0.5)).rg;
+  vec2 lumaRangeA = texture(uLUMA_RANGE_A, vec2(0.5)).rg;
+  vec2 lumaRangeB = texture(uLUMA_RANGE_B, vec2(0.5)).rg;
   vec2 lumaRange = mix(lumaRangeA, lumaRangeB, colorBlend);
 
   // Scale grid dimensions to the current mip level
   float scale = pow(2.0, level);
-  float currentPitch = uPitch * scale;
-  float currentCellSize = uCellSize * scale;
+  float currentPitch = uPITCH * scale;
+  float currentCellSize = uCELL_SIZE * scale;
 
   // Which 2x2 group does this pixel belong to, and where does it merge?
   vec2 groupCoord = floor(gl_FragCoord.xy / (currentPitch * 2.0));
   vec2 mergedCenter = (groupCoord + 0.5) * currentPitch * 2.0;
-  vec2 levelDim = max(vec2(1.0), floor(uGridSize / scale));
+  vec2 levelDim = max(vec2(1.0), floor(uGRID_SIZE / scale));
 
   // --- Stage 2: Merge target (parent cell, one mip level up) ---
-  vec2 nextDim = max(vec2(1.0), floor(uGridSize / (scale * 2.0)));
+  vec2 nextDim = max(vec2(1.0), floor(uGRID_SIZE / (scale * 2.0)));
   vec2 mergedUV = (groupCoord + 0.5) / nextDim;
   // Sample A and B frame colors from the coarser mip, blend by colorBlend
-  vec4 mergedColorA = textureLod(uCellColorsA, mergedUV, level + 1.0);
-  vec4 mergedColorB = textureLod(uCellColorsB, mergedUV, level + 1.0);
+  vec4 mergedColorA = textureLod(uCELL_COLORS_A, mergedUV, level + 1.0);
+  vec4 mergedColorB = textureLod(uCELL_COLORS_B, mergedUV, level + 1.0);
   vec4 mergedColor = mix(mergedColorA, mergedColorB, colorBlend);
   // Convert to luminance → normalize → radius (the target the children merge into)
   float mergedNormLuma = clamp(
-    (dot(mergedColor.rgb, uLuma) - lumaRange.r) / (lumaRange.g - lumaRange.r),
+    (dot(mergedColor.rgb, uLUMA) - lumaRange.r) / (lumaRange.g - lumaRange.r),
     0.0, 1.0
   );
   float mergedRadius = sqrt(mergedNormLuma) * currentCellSize;
@@ -191,13 +191,13 @@ void main() {
 
       // 3a: Sample A and B colors at current mip, blend by colorBlend
       vec2 childUV = (childCoord + 0.5) / levelDim;
-      vec4 colorA = textureLod(uCellColorsA, childUV, level);
-      vec4 colorB = textureLod(uCellColorsB, childUV, level);
+      vec4 colorA = textureLod(uCELL_COLORS_A, childUV, level);
+      vec4 colorB = textureLod(uCELL_COLORS_B, childUV, level);
       vec4 color = mix(colorA, colorB, colorBlend);
 
       // Convert to luminance → normalize against blended luma range → radius
       float normLuma = clamp(
-        (dot(color.rgb, uLuma) - lumaRange.r) / (lumaRange.g - lumaRange.r),
+        (dot(color.rgb, uLUMA) - lumaRange.r) / (lumaRange.g - lumaRange.r),
         0.0, 1.0
       );
       float childRadius = sqrt(normLuma) * currentCellSize * 0.5;

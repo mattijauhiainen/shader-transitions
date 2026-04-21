@@ -3,15 +3,15 @@ precision highp float;
 
 #define PI 3.14159265
 
-uniform sampler2D uCellColorsA;
-uniform sampler2D uLumaRangeA;
-uniform sampler2D uCellColorsB;
-uniform sampler2D uLumaRangeB;
-uniform vec2 uGridSize;
-uniform float uCellSize;
-uniform float uPitch;
-uniform vec3 uLuma;
-uniform vec2 uViewport;
+uniform sampler2D uCELL_COLORS_A;
+uniform sampler2D uLUMA_RANGE_A;
+uniform sampler2D uCELL_COLORS_B;
+uniform sampler2D uLUMA_RANGE_B;
+uniform vec2 uGRID_SIZE;
+uniform float uCELL_SIZE;
+uniform float uPITCH;
+uniform vec3 uLUMA;
+uniform vec2 uVIEWPORT;
 uniform float uTime;
 
 in vec2 aPosition;
@@ -21,10 +21,10 @@ flat out float vRadius;
 out float vEdge;
 
 void main() {
-    int col = gl_InstanceID % int(uGridSize.x);
-    int row = gl_InstanceID / int(uGridSize.x);
+    int col = gl_InstanceID % int(uGRID_SIZE.x);
+    int row = gl_InstanceID / int(uGRID_SIZE.x);
     vec2 cellCoord = vec2(col, row);
-    vec2 cellCenter = (cellCoord + 0.5) * uPitch;
+    vec2 cellCenter = (cellCoord + 0.5) * uPITCH;
 
     float angle = uTime * PI;
     // Precalculate cos and sin for the angle, we need this few times.
@@ -39,24 +39,24 @@ void main() {
     // undoing the mirroring that would otherwise happen.
     vec2 sampleCoord = cellCoord;
     if (!isFront) {
-        sampleCoord.x = uGridSize.x - 1.0 - cellCoord.x;
+        sampleCoord.x = uGRID_SIZE.x - 1.0 - cellCoord.x;
     }
-    vec2 uv = (sampleCoord + 0.5) / uGridSize;
+    vec2 uv = (sampleCoord + 0.5) / uGRID_SIZE;
 
     vec4 color;
     vec2 range;
     if (isFront) {
-        color = textureLod(uCellColorsA, uv, 0.0);
-        range = textureLod(uLumaRangeA, vec2(0.5), 0.0).rg;
+        color = textureLod(uCELL_COLORS_A, uv, 0.0);
+        range = textureLod(uLUMA_RANGE_A, vec2(0.5), 0.0).rg;
     } else {
-        color = textureLod(uCellColorsB, uv, 0.0);
-        range = textureLod(uLumaRangeB, vec2(0.5), 0.0).rg;
+        color = textureLod(uCELL_COLORS_B, uv, 0.0);
+        range = textureLod(uLUMA_RANGE_B, vec2(0.5), 0.0).rg;
     }
 
     float normLuma = clamp(
-            (dot(color.rgb, uLuma) - range.r) / (range.g - range.r),
+            (dot(color.rgb, uLUMA) - range.r) / (range.g - range.r),
             0.0, 1.0);
-    float radius = sqrt(normLuma) * uCellSize * 0.5;
+    float radius = sqrt(normLuma) * uCELL_SIZE * 0.5;
 
     // aPosition is a unit circle vertex — scale to dot radius + 0.5px
     // for antialiasing margin. Each vertex gets its own 3D position,
@@ -68,7 +68,7 @@ void main() {
     // Per-vertex rotation and perspective — each vertex of the circle
     // gets its own depth and projection, unlike quad-based transitions
     // where perspective is computed once per cell center.
-    vec2 gridCenter = uGridSize * uPitch * 0.5;
+    vec2 gridCenter = uGRID_SIZE * uPITCH * 0.5;
     float centeredX = worldPos.x - gridCenter.x;
     float centeredY = worldPos.y - gridCenter.y;
 
@@ -87,7 +87,7 @@ void main() {
     // Calculate the scaling that comes from our perspective with
     // camera distance / (camera distance - z displacement), saying
     // that we've moved perspScale times closer to the camera.
-    float camDist = uViewport.x * 0.5;
+    float camDist = uVIEWPORT.x * 0.5;
     float perspScale = camDist / (camDist - rotZ);
 
     // Calculate where on the screen the cell actually gets rendered,
@@ -97,7 +97,7 @@ void main() {
     // move closer to the center on the x-axis.
     vec2 projected = vec2(rotX * perspScale, centeredY * perspScale) + gridCenter;
 
-    gl_Position = vec4(projected / uViewport * 2.0 - 1.0, 0.0, 1.0);
+    gl_Position = vec4(projected / uVIEWPORT * 2.0 - 1.0, 0.0, 1.0);
 
     vColor = color;
     // Scale the radius by perspective — cells closer to the camera

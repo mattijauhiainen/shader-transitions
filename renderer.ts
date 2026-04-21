@@ -272,13 +272,13 @@ export class Renderer implements RendererContext {
     );
 
     gl.useProgram(program);
-    gl.uniform1i(gl.getUniformLocation(program, "uTexture"), 0);
+    gl.uniform1i(gl.getUniformLocation(program, "uTEXTURE"), 0);
     gl.useProgram(null);
 
     return {
       program,
-      uImageSize: gl.getUniformLocation(program, "uImageSize")!,
-      uCanvasSize: gl.getUniformLocation(program, "uCanvasSize")!,
+      uImageSize: gl.getUniformLocation(program, "uIMAGE_SIZE")!,
+      uCanvasSize: gl.getUniformLocation(program, "uCANVAS_SIZE")!,
     };
   }
 
@@ -287,9 +287,9 @@ export class Renderer implements RendererContext {
     const program = this.createProgram(fullscreenQuadVert, lumaRangesFrag);
 
     gl.useProgram(program);
-    gl.uniform1i(gl.getUniformLocation(program, "uTexture"), 0);
+    gl.uniform1i(gl.getUniformLocation(program, "uTEXTURE"), 0);
     gl.uniform3f(
-      gl.getUniformLocation(program, "uLuma"),
+      gl.getUniformLocation(program, "uLUMA"),
       LUMA[0],
       LUMA[1],
       LUMA[2],
@@ -298,7 +298,7 @@ export class Renderer implements RendererContext {
 
     return {
       program,
-      uInputSize: gl.getUniformLocation(program, "uInputSize")!,
+      uInputSize: gl.getUniformLocation(program, "uINPUT_SIZE")!,
       uIsFirstStep: gl.getUniformLocation(program, "uIsFirstStep")!,
     };
   }

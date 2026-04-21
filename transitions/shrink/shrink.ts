@@ -15,19 +15,23 @@ export function createShrinkTransition(ctx: RendererContext): Transition {
   const program = ctx.createProgram(fullscreenQuadVert, fragSrc);
 
   gl.useProgram(program);
-  gl.uniform2f(gl.getUniformLocation(program, "uGridSize"), ctx.cols, ctx.rows);
-  gl.uniform1f(gl.getUniformLocation(program, "uCellSize"), CELL_SIZE);
-  gl.uniform1f(gl.getUniformLocation(program, "uPitch"), PITCH);
+  gl.uniform2f(
+    gl.getUniformLocation(program, "uGRID_SIZE"),
+    ctx.cols,
+    ctx.rows,
+  );
+  gl.uniform1f(gl.getUniformLocation(program, "uCELL_SIZE"), CELL_SIZE);
+  gl.uniform1f(gl.getUniformLocation(program, "uPITCH"), PITCH);
   gl.uniform3f(
-    gl.getUniformLocation(program, "uLuma"),
+    gl.getUniformLocation(program, "uLUMA"),
     LUMA[0],
     LUMA[1],
     LUMA[2],
   );
-  gl.uniform1i(gl.getUniformLocation(program, "uCellColorsA"), 0);
-  gl.uniform1i(gl.getUniformLocation(program, "uLumaRangeA"), 1);
-  gl.uniform1i(gl.getUniformLocation(program, "uCellColorsB"), 2);
-  gl.uniform1i(gl.getUniformLocation(program, "uLumaRangeB"), 3);
+  gl.uniform1i(gl.getUniformLocation(program, "uCELL_COLORS_A"), 0);
+  gl.uniform1i(gl.getUniformLocation(program, "uLUMA_RANGE_A"), 1);
+  gl.uniform1i(gl.getUniformLocation(program, "uCELL_COLORS_B"), 2);
+  gl.uniform1i(gl.getUniformLocation(program, "uLUMA_RANGE_B"), 3);
   gl.useProgram(null);
 
   const uTime = gl.getUniformLocation(program, "uTime")!;

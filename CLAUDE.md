@@ -16,3 +16,5 @@ The frontend is deployed as a static site. Do not add any features that would re
 ## Conventions
 
 Run biome after all your code changes to ensure consistent formatting.
+
+GLSL uniform naming: scene uniforms (set once at init) use `SCREAMING_CASE` with a `u` prefix (e.g. `uGRID_SIZE`, `uCELL_SIZE`, `uPITCH`). Per-frame uniforms (set each render call) use `camelCase` with a `u` prefix (e.g. `uTime`, `uPhase`, `uCamPos`).

@@ -213,24 +213,28 @@ export function createRainTransition(ctx: RendererContext): Transition {
 
   // Cache uniform locations
   gl.useProgram(program);
-  gl.uniform2f(gl.getUniformLocation(program, "uGridSize"), ctx.cols, ctx.rows);
   gl.uniform2f(
-    gl.getUniformLocation(program, "uViewportPx"),
+    gl.getUniformLocation(program, "uGRID_SIZE"),
+    ctx.cols,
+    ctx.rows,
+  );
+  gl.uniform2f(
+    gl.getUniformLocation(program, "uVIEWPORT"),
     ctx.canvasWidth,
     ctx.canvasHeight,
   );
-  gl.uniform1f(gl.getUniformLocation(program, "uCellSize"), CELL_SIZE);
-  gl.uniform1f(gl.getUniformLocation(program, "uPitch"), PITCH);
+  gl.uniform1f(gl.getUniformLocation(program, "uCELL_SIZE"), CELL_SIZE);
+  gl.uniform1f(gl.getUniformLocation(program, "uPITCH"), PITCH);
   gl.uniform3f(
-    gl.getUniformLocation(program, "uLuma"),
+    gl.getUniformLocation(program, "uLUMA"),
     LUMA[0],
     LUMA[1],
     LUMA[2],
   );
-  gl.uniform1f(gl.getUniformLocation(program, "uFallWindow"), FALL_WINDOW);
-  gl.uniform1i(gl.getUniformLocation(program, "uCellColors"), 0);
-  gl.uniform1i(gl.getUniformLocation(program, "uLumaRange"), 1);
-  gl.uniform1i(gl.getUniformLocation(program, "uDropMap"), 2);
+  gl.uniform1f(gl.getUniformLocation(program, "uFALL_WINDOW"), FALL_WINDOW);
+  gl.uniform1i(gl.getUniformLocation(program, "uCELL_COLORS"), 0);
+  gl.uniform1i(gl.getUniformLocation(program, "uLUMA_RANGE"), 1);
+  gl.uniform1i(gl.getUniformLocation(program, "uDROP_MAP"), 2);
   gl.useProgram(null);
 
   const uTime = gl.getUniformLocation(program, "uTimeNorm")!;
