@@ -10,6 +10,7 @@ import { createCollapseTransition } from "./transitions/collapse.ts";
 import { createExplodeTransition } from "./transitions/explode.ts";
 import { createFlipTransition } from "./transitions/flip.ts";
 import { createMitosisTransition } from "./transitions/mitosis.ts";
+import { createOrbitTransition } from "./transitions/orbit.ts";
 import { createPageflipTransition } from "./transitions/pageflip.ts";
 import { createRadialTransition } from "./transitions/radial.ts";
 import { createRainTransition } from "./transitions/rain.ts";
@@ -107,6 +108,7 @@ export class Renderer implements RendererContext {
       createRainTransition(this),
       createMitosisTransition(this),
       createFlipTransition(this),
+      createOrbitTransition(this),
     ];
   }
 

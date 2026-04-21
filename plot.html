@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CruiseUpZ * RollT Plot (Orbit Source)</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }
+        canvas { border: 1px solid #ccc; background-color: #f9f9f9; }
+        .controls { margin-bottom: 20px; text-align: center; }
+    </style>
+</head>
+<body>
+    <h1 style="margin-top: 40px;">Dynamic Up Vector Plot (Orbit Transition Logic)</h1>
+    <div class="controls">
+        <p>This plot visualizes the product of the smooth curve (`Math.tanh`) and the Gaussian decay (`Math.exp`), based on the logic found in `orbit.ts`.</p>
+        <p><strong style="color: green;">NOTE:</strong> The plotting function uses constants defined within the source code, making it highly accurate to the original implementation's math.</p>
+    </div>
+
+    <canvas id="plotCanvas" width="800" height="400"></canvas>
+
+    <h2 style="margin-top: 40px;">Path Shape (X-Y plane)</h2>
+    <div class="controls">
+        <p>The orbit path projected onto the X-Y plane, <code>pathT ∈ [0, 1]</code>. Color fades from blue (t=0) to red (t=1).</p>
+        <p>
+            <code>x = Wx · sin(<b>Fx</b>·π·t) · sin²(π·t)</code> &nbsp;
+            <code>y = Hy · sin(<b>Fy</b>·π·t) · sin²(π·t)</code>
+        </p>
+        <div style="display: grid; grid-template-columns: auto auto auto; gap: 4px 12px; justify-content: center; align-items: center;">
+            <label for="sliderWx">Wx</label>
+            <input type="range" id="sliderWx" min="0.1" max="3" step="0.05" value="1">
+            <span id="valWx">1.00</span>
+
+            <label for="sliderHy">Hy</label>
+            <input type="range" id="sliderHy" min="0.1" max="3" step="0.05" value="1">
+            <span id="valHy">1.00</span>
+
+            <label for="sliderFx">Fx</label>
+            <input type="range" id="sliderFx" min="1" max="8" step="1" value="2">
+            <span id="valFx">2</span>
+
+            <label for="sliderFy">Fy</label>
+            <input type="range" id="sliderFy" min="1" max="8" step="1" value="4">
+            <span id="valFy">4</span>
+
+            <label for="sliderEnv">Env power</label>
+            <input type="range" id="sliderEnv" min="0" max="4" step="0.1" value="0.5">
+            <span id="valEnv">0.5</span>
+        </div>
+    </div>
+    <canvas id="xyCanvas" width="800" height="800"></canvas>
+
+    <h2 style="margin-top: 40px;">X(t) and Y(t) over t</h2>
+    <div class="controls">
+        <p>The x and y components over time, showing the effect of the envelope on each term.</p>
+        <p>
+            <code>x(t) = Wx · sin(Fx·π·t) · sin(π·t)<sup>P</sup></code> &nbsp;
+            <code>y(t) = Hy · sin(Fy·π·t) · sin(π·t)<sup>P</sup></code>
+        </p>
+    </div>
+    <canvas id="xtCanvas" width="800" height="300"></canvas>
+    <canvas id="ytCanvas" width="800" height="300" style="margin-top: 10px;"></canvas>
+
+    <h2 style="margin-top: 40px;">Camera Basis Orthonormalization</h2>
+    <div class="controls">
+        <p>How two cross products turn a <strong>forward</strong> direction and an approximate <strong>up hint</strong> into an exact orthonormal basis.</p>
+        <p>Drag the <strong style="color: #e040a0;">up hint</strong> arrow to see how the corrected <strong style="color: green;">camUp</strong> always stays perpendicular to <strong style="color: blue;">forward</strong>.</p>
+        <div style="display: grid; grid-template-columns: auto auto auto; gap: 4px 12px; justify-content: center; align-items: center;">
+            <label for="sliderTilt">Tilt (°)</label>
+            <input type="range" id="sliderTilt" min="-60" max="60" step="1" value="25">
+            <span id="valTilt">25</span>
+        </div>
+    </div>
+    <canvas id="basisCanvas" width="800" height="500"></canvas>
+
+    <h2 style="margin-top: 40px;">Z Curve over t</h2>
+    <div class="controls">
+        <p>The z-component of the orbit path: a sinh/tanh blend that ramps to &plusmn;D with a cruise plateau and fast zero-crossing.</p>
+        <p>
+            <code>z = D·(A·sinh(K<sub>Z</sub>·u)/sinh(K<sub>Z</sub>) + B·tanh(K<sub>C</sub>·u)/tanh(K<sub>C</sub>)) / (A+B)</code>, &nbsp; <code>u = 2t &minus; 1</code>
+        </p>
+        <div style="display: grid; grid-template-columns: auto auto auto; gap: 4px 12px; justify-content: center; align-items: center;">
+            <label for="sliderKZ">K<sub>Z</sub></label>
+            <input type="range" id="sliderKZ" min="0.5" max="20" step="0.1" value="16">
+            <span id="valKZ">16.0</span>
+
+            <label for="sliderKC">K<sub>C</sub></label>
+            <input type="range" id="sliderKC" min="0.5" max="15" step="0.1" value="10">
+            <span id="valKC">10.0</span>
+
+            <label for="sliderA">A</label>
+            <input type="range" id="sliderA" min="0" max="4" step="0.01" value="2">
+            <span id="valA">2.00</span>
+
+            <label for="sliderB">B</label>
+            <input type="range" id="sliderB" min="0" max="2" step="0.01" value="0.1">
+            <span id="valB">0.10</span>
+        </div>
+    </div>
+    <canvas id="zCanvas" width="800" height="400"></canvas>
+
+    <script type="module">
+        import { data } from "./data.js";
+
+        const canvas = document.getElementById('plotCanvas');
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
+
+        function drawPlot() {
+            ctx.clearRect(0, 0, width, height);
+
+    if (!data || data.length < 2) {
+        ctx.fillStyle = 'red';
+        ctx.font = '16px Arial';
+        ctx.fillText('No data available to plot.', 50, height / 2);
+        return;
+    }
+
+    // Calculate the maximum absolute value for scaling Y-axis across all series
+    let maxValue = 0;
+    for (const point of data) {
+        maxValue = Math.max(
+            maxValue,
+            Math.abs(point.rollT),
+            Math.abs(point.cruiseUpZ),
+            Math.abs(point.rollT * point.cruiseUpZ)
+        );
+    }
+
+    // Helper function to map value (Y) at time t (X)
+    const plotPoint = (t, yValue) => {
+        // X-axis maps time t [t_min, t_max] to pixel width [0, W]
+        const x = ((t - data[0].t) / (data[data.length - 1].t - data[0].t)) * width;
+        // Y-axis maps value [-V, V] to pixel height [H, 0]. Offset by 25px for margin.
+        const margin = 30;
+        const y = height / 2 - (yValue / maxValue) * (height / 2 - margin);
+        return { x, y };
+    };
+
+    // Draw the curve line for rollT (Blue)
+    ctx.beginPath();
+    ctx.strokeStyle = 'blue';
+    ctx.lineWidth = 2;
+    let firstPoint = plotPoint(data[0].t, data[0].rollT);
+    ctx.moveTo(firstPoint.x, firstPoint.y);
+
+    for (let i = 1; i < data.length; i++) {
+        const point = data[i];
+        const nextPoint = plotPoint(point.t, point.rollT);
+        ctx.lineTo(nextPoint.x, nextPoint.y);
+    }
+    ctx.stroke();
+
+    // Draw the curve line for cruiseUpZ (Green)
+    ctx.beginPath();
+    ctx.strokeStyle = 'green';
+    ctx.lineWidth = 2;
+    firstPoint = plotPoint(data[0].t, data[0].cruiseUpZ);
+    ctx.moveTo(firstPoint.x, firstPoint.y);
+
+    for (let i = 1; i < data.length; i++) {
+        const point = data[i];
+        const nextPoint = plotPoint(point.t, point.cruiseUpZ);
+        ctx.lineTo(nextPoint.x, nextPoint.y);
+    }
+    ctx.stroke();
+
+    // Draw the curve line for rollT * cruiseUpZ (Red)
+    ctx.beginPath();
+    ctx.strokeStyle = 'red';
+    ctx.lineWidth = 2;
+    firstPoint = plotPoint(data[0].t, data[0].rollT * data[0].cruiseUpZ);
+    ctx.moveTo(firstPoint.x, firstPoint.y);
+
+    for (let i = 1; i < data.length; i++) {
+        const point = data[i];
+        const productVal = point.rollT * point.cruiseUpZ;
+        const nextPoint = plotPoint(point.t, productVal);
+        ctx.lineTo(nextPoint.x, nextPoint.y);
+    }
+    ctx.stroke();
+
+
+    // Zero line
+    ctx.beginPath();
+    ctx.strokeStyle = '#aaa';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.moveTo(0, height / 2);
+    ctx.lineTo(width, height / 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Axis labels
+    ctx.fillStyle = 'black';
+    ctx.font = '14px Arial';
+    ctx.fillText('t', width - 20, height / 2 + 16);
+
+    // Legend
+    const legend = [
+        { color: 'blue', label: 'rollT' },
+        { color: 'green', label: 'cruiseUpZ' },
+        { color: 'red', label: 'cruiseUpZ × rollT' },
+    ];
+    let lx = 20;
+    for (const item of legend) {
+        ctx.fillStyle = item.color;
+        ctx.fillRect(lx, 10, 14, 14);
+        ctx.fillStyle = 'black';
+        ctx.fillText(item.label, lx + 20, 22);
+        lx += ctx.measureText(item.label).width + 40;
+    }
+}
+        // Run the drawing function when the script loads
+        drawPlot();
+
+        // ── Path shape (X-Y plane) ─────────────────────────────────
+        function drawXYPlot() {
+            const canvas = document.getElementById('xyCanvas');
+            const ctx = canvas.getContext('2d');
+            const W = canvas.width;
+            const H = canvas.height;
+            const margin = 50;
+            const plotSize = Math.min(W, H) - margin * 2;
+
+            const N = 1000;
+            const Wx = parseFloat(document.getElementById('sliderWx').value);
+            const Hy = parseFloat(document.getElementById('sliderHy').value);
+            const Fx = parseFloat(document.getElementById('sliderFx').value);
+            const Fy = parseFloat(document.getElementById('sliderFy').value);
+            const envP = parseFloat(document.getElementById('sliderEnv').value);
+
+            // Sample path
+            const points = [];
+            let maxAbs = 0;
+            for (let i = 0; i <= N; i++) {
+                const t = i / N;
+                const piT = Math.PI * t;
+                const env = Math.sin(piT) ** envP;
+                const x = Wx * Math.sin(Fx * piT) * env;
+                const y = Hy * Math.sin(Fy * piT) * env;
+                points.push({ t, x, y });
+                maxAbs = Math.max(maxAbs, Math.abs(x), Math.abs(y));
+            }
+
+            const toPixel = (x, y) => ({
+                px: W / 2 + (x / maxAbs) * (plotSize / 2),
+                py: H / 2 - (y / maxAbs) * (plotSize / 2),
+            });
+
+            ctx.clearRect(0, 0, W, H);
+
+            // Grid
+            ctx.strokeStyle = '#e8e8e8';
+            ctx.lineWidth = 1;
+            for (let v = -1; v <= 1; v += 0.25) {
+                const val = v * maxAbs;
+                const { px } = toPixel(val, 0);
+                const { py } = toPixel(0, val);
+                ctx.beginPath(); ctx.moveTo(px, margin); ctx.lineTo(px, H - margin); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(margin, py); ctx.lineTo(W - margin, py); ctx.stroke();
+            }
+
+            // Axes
+            ctx.strokeStyle = '#aaa';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath(); ctx.moveTo(margin, H / 2); ctx.lineTo(W - margin, H / 2); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(W / 2, margin); ctx.lineTo(W / 2, H - margin); ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw path with color gradient: blue (t=0) -> red (t=1)
+            ctx.lineWidth = 2.5;
+            for (let i = 0; i < N; i++) {
+                const t = i / N;
+                const r = Math.round(t * 255);
+                const b = Math.round((1 - t) * 255);
+                ctx.strokeStyle = `rgb(${r}, 0, ${b})`;
+                const from = toPixel(points[i].x, points[i].y);
+                const to = toPixel(points[i + 1].x, points[i + 1].y);
+                ctx.beginPath();
+                ctx.moveTo(from.px, from.py);
+                ctx.lineTo(to.px, to.py);
+                ctx.stroke();
+            }
+
+            // Start/end marker
+            const start = toPixel(points[0].x, points[0].y);
+            ctx.beginPath();
+            ctx.arc(start.px, start.py, 5, 0, 2 * Math.PI);
+            ctx.fillStyle = 'blue';
+            ctx.fill();
+            ctx.fillStyle = 'black';
+            ctx.font = '13px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('t=0, t=1', start.px + 8, start.py + 4);
+
+            // Axis labels
+            ctx.fillStyle = 'black';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('x', W - margin + 20, H / 2 + 5);
+            ctx.fillText('y', W / 2, margin - 15);
+
+            // ── Envelope inset (bottom-right corner) ──
+            const inW = 180, inH = 100, inPad = 12;
+            const inX = W - margin - inW;
+            const inY = H - margin - inH;
+
+            // Background
+            ctx.fillStyle = 'rgba(255,255,255,0.85)';
+            ctx.fillRect(inX - inPad, inY - inPad - 16, inW + 2 * inPad, inH + 2 * inPad + 16);
+            ctx.strokeStyle = '#ccc';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(inX - inPad, inY - inPad - 16, inW + 2 * inPad, inH + 2 * inPad + 16);
+
+            // Title
+            ctx.fillStyle = 'black';
+            ctx.font = '11px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(`envelope: sin(πt)^${envP.toFixed(1)}`, inX, inY - 4);
+
+            // Axes
+            ctx.strokeStyle = '#aaa';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath(); ctx.moveTo(inX, inY + inH); ctx.lineTo(inX + inW, inY + inH); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(inX, inY); ctx.lineTo(inX, inY + inH); ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Tick labels
+            ctx.fillStyle = '#666';
+            ctx.font = '9px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('0', inX, inY + inH + 10);
+            ctx.fillText('1', inX + inW, inY + inH + 10);
+            ctx.textAlign = 'right';
+            ctx.fillText('1', inX - 3, inY + 4);
+            ctx.fillText('0', inX - 3, inY + inH + 3);
+
+            // Draw envelope curve
+            ctx.beginPath();
+            ctx.strokeStyle = '#e040a0';
+            ctx.lineWidth = 2;
+            for (let i = 0; i <= N; i++) {
+                const t = i / N;
+                const env = Math.sin(Math.PI * t) ** envP;
+                const px = inX + t * inW;
+                const py = inY + (1 - env) * inH;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+        }
+
+        drawXYPlot();
+
+        // ── X(t) and Y(t) component plots ─────────────────────────
+        function drawComponentPlot(canvasId, label, freq, ampSlider, color) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            const W = canvas.width;
+            const H = canvas.height;
+            const margin = 40;
+
+            const amp = parseFloat(document.getElementById(ampSlider).value);
+            const F = parseFloat(document.getElementById(freq).value);
+            const envP = parseFloat(document.getElementById('sliderEnv').value);
+
+            const N = 1000;
+            ctx.clearRect(0, 0, W, H);
+
+            const toPixel = (t, v, maxV) => ({
+                px: margin + t * (W - 2 * margin),
+                py: H / 2 - (v / maxV) * (H / 2 - 20),
+            });
+
+            // maxV for scaling — amplitude * 1 (envelope peaks at 1)
+            const maxV = amp * 1.1;
+
+            // Grid
+            ctx.strokeStyle = '#e8e8e8';
+            ctx.lineWidth = 1;
+            for (let t = 0; t <= 1; t += 0.1) {
+                const { px } = toPixel(t, 0, maxV);
+                ctx.beginPath(); ctx.moveTo(px, 10); ctx.lineTo(px, H - 10); ctx.stroke();
+            }
+
+            // Zero line
+            ctx.strokeStyle = '#aaa';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            const { py: zeroY } = toPixel(0, 0, maxV);
+            ctx.beginPath(); ctx.moveTo(margin, zeroY); ctx.lineTo(W - margin, zeroY); ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw raw sine (without envelope) as dashed
+            ctx.beginPath();
+            ctx.strokeStyle = '#ccc';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 4]);
+            for (let i = 0; i <= N; i++) {
+                const t = i / N;
+                const v = amp * Math.sin(F * Math.PI * t);
+                const p = toPixel(t, v, maxV);
+                if (i === 0) ctx.moveTo(p.px, p.py);
+                else ctx.lineTo(p.px, p.py);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw enveloped signal
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2.5;
+            for (let i = 0; i <= N; i++) {
+                const t = i / N;
+                const env = Math.sin(Math.PI * t) ** envP;
+                const v = amp * Math.sin(F * Math.PI * t) * env;
+                const p = toPixel(t, v, maxV);
+                if (i === 0) ctx.moveTo(p.px, p.py);
+                else ctx.lineTo(p.px, p.py);
+            }
+            ctx.stroke();
+
+            // Draw envelope bounds as dotted
+            ctx.strokeStyle = '#e040a0';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            for (const sign of [1, -1]) {
+                ctx.beginPath();
+                for (let i = 0; i <= N; i++) {
+                    const t = i / N;
+                    const env = Math.sin(Math.PI * t) ** envP;
+                    const p = toPixel(t, sign * amp * env, maxV);
+                    if (i === 0) ctx.moveTo(p.px, p.py);
+                    else ctx.lineTo(p.px, p.py);
+                }
+                ctx.stroke();
+            }
+            ctx.setLineDash([]);
+
+            // Legend
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'left';
+            let lx = margin + 5;
+            // Raw sine
+            ctx.strokeStyle = '#ccc';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath(); ctx.moveTo(lx, 14); ctx.lineTo(lx + 20, 14); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#999';
+            ctx.fillText(`sin(${label})`, lx + 24, 18);
+            lx += ctx.measureText(`sin(${label})`).width + 44;
+            // Envelope bounds
+            ctx.strokeStyle = '#e040a0';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath(); ctx.moveTo(lx, 14); ctx.lineTo(lx + 20, 14); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#e040a0';
+            ctx.fillText('±envelope', lx + 24, 18);
+            lx += ctx.measureText('±envelope').width + 44;
+            // Enveloped
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath(); ctx.moveTo(lx, 14); ctx.lineTo(lx + 20, 14); ctx.stroke();
+            ctx.fillStyle = 'black';
+            ctx.fillText(label, lx + 24, 18);
+
+            // Axis labels
+            ctx.fillStyle = 'black';
+            ctx.font = '13px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('t', W - margin + 16, zeroY + 4);
+            ctx.textAlign = 'center';
+            for (let t = 0; t <= 1; t += 0.25) {
+                const { px } = toPixel(t, 0, maxV);
+                ctx.fillText(t.toFixed(2), px, H - 2);
+            }
+        }
+
+        function drawComponentPlots() {
+            drawComponentPlot('xtCanvas', 'x(t)', 'sliderFx', 'sliderWx', 'blue');
+            drawComponentPlot('ytCanvas', 'y(t)', 'sliderFy', 'sliderHy', 'green');
+        }
+
+        drawComponentPlots();
+
+        for (const id of ['sliderWx', 'sliderHy', 'sliderFx', 'sliderFy', 'sliderEnv']) {
+            document.getElementById(id).addEventListener('input', (e) => {
+                const valId = 'val' + id.slice(6); // sliderWx -> valWx
+                const val = e.target.value;
+                document.getElementById(valId).textContent =
+                    id.startsWith('sliderF') ? val : parseFloat(val).toFixed(2);
+                drawXYPlot();
+                drawComponentPlots();
+            });
+        }
+
+        // ── Z curve plot ───────────────────────────────────────────────
+        function drawZPlot() {
+            const canvas = document.getElementById('zCanvas');
+            const ctx = canvas.getContext('2d');
+            const W = canvas.width;
+            const H = canvas.height;
+            const margin = 30;
+
+            const KZ = parseFloat(document.getElementById('sliderKZ').value);
+            const KC = parseFloat(document.getElementById('sliderKC').value);
+            const Ap = parseFloat(document.getElementById('sliderA').value);
+            const Bp = parseFloat(document.getElementById('sliderB').value);
+
+            const N = 1000;
+            const points = [];
+            const shZ = Math.sinh(KZ);
+            const thC = Math.tanh(KC);
+            const norm = 1 / (Ap + Bp || 1); // D cancels out, just plot normalized
+
+            for (let i = 0; i <= N; i++) {
+                const t = i / N;
+                const u = 2 * t - 1;
+                const zSinh = Math.sinh(KZ * u) / shZ;
+                const zTanh = Math.tanh(KC * u) / thC;
+                const z = norm * (Ap * zSinh + Bp * zTanh);
+                points.push({ t, z, zSinh, zTanh });
+            }
+
+            // z ranges from -1 to 1 (normalized by D)
+            const maxZ = 1.1;
+
+            const toPixel = (t, z) => ({
+                px: margin + t * (W - 2 * margin),
+                py: H / 2 - (z / maxZ) * (H / 2 - margin),
+            });
+
+            ctx.clearRect(0, 0, W, H);
+
+            // Grid lines
+            ctx.strokeStyle = '#e8e8e8';
+            ctx.lineWidth = 1;
+            for (let v = -1; v <= 1; v += 0.25) {
+                const { py } = toPixel(0, v);
+                ctx.beginPath(); ctx.moveTo(margin, py); ctx.lineTo(W - margin, py); ctx.stroke();
+            }
+            for (let t = 0; t <= 1; t += 0.1) {
+                const { px } = toPixel(t, 0);
+                ctx.beginPath(); ctx.moveTo(px, margin); ctx.lineTo(px, H - margin); ctx.stroke();
+            }
+
+            // Zero line
+            ctx.strokeStyle = '#aaa';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            const zero = toPixel(0, 0);
+            ctx.beginPath(); ctx.moveTo(margin, zero.py); ctx.lineTo(W - margin, zero.py); ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw sinh constituent
+            ctx.beginPath();
+            ctx.strokeStyle = 'blue';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([6, 4]);
+            let p0 = toPixel(points[0].t, points[0].zSinh);
+            ctx.moveTo(p0.px, p0.py);
+            for (let i = 1; i <= N; i++) {
+                const p = toPixel(points[i].t, points[i].zSinh);
+                ctx.lineTo(p.px, p.py);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw tanh constituent
+            ctx.beginPath();
+            ctx.strokeStyle = 'green';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([6, 4]);
+            p0 = toPixel(points[0].t, points[0].zTanh);
+            ctx.moveTo(p0.px, p0.py);
+            for (let i = 1; i <= N; i++) {
+                const p = toPixel(points[i].t, points[i].zTanh);
+                ctx.lineTo(p.px, p.py);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw combined z curve
+            ctx.beginPath();
+            ctx.strokeStyle = '#e040a0';
+            ctx.lineWidth = 2.5;
+            p0 = toPixel(points[0].t, points[0].z);
+            ctx.moveTo(p0.px, p0.py);
+            for (let i = 1; i <= N; i++) {
+                const p = toPixel(points[i].t, points[i].z);
+                ctx.lineTo(p.px, p.py);
+            }
+            ctx.stroke();
+
+            // Legend
+            const legend = [
+                { color: 'blue', label: 'sinh(K_Z·u)/sinh(K_Z)', dash: true },
+                { color: 'green', label: 'tanh(K_C·u)/tanh(K_C)', dash: true },
+                { color: '#e040a0', label: 'combined z(t)/D', dash: false },
+            ];
+            let lx = margin;
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'left';
+            for (const item of legend) {
+                ctx.strokeStyle = item.color;
+                ctx.lineWidth = item.dash ? 1.5 : 2.5;
+                if (item.dash) ctx.setLineDash([6, 4]);
+                ctx.beginPath(); ctx.moveTo(lx, 16); ctx.lineTo(lx + 20, 16); ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.fillStyle = 'black';
+                ctx.fillText(item.label, lx + 24, 20);
+                lx += ctx.measureText(item.label).width + 44;
+            }
+
+            // Labels
+            ctx.fillStyle = 'black';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('t', W - margin + 20, zero.py + 5);
+            ctx.textAlign = 'right';
+            ctx.fillText('z/D', margin - 5, margin + 5);
+            // Y-axis tick labels
+            ctx.font = '11px Arial';
+            for (let v = -1; v <= 1; v += 0.5) {
+                const { py } = toPixel(0, v);
+                ctx.fillText(v.toFixed(1), margin - 5, py + 4);
+            }
+            // X-axis tick labels
+            ctx.textAlign = 'center';
+            for (let t = 0; t <= 1; t += 0.25) {
+                const { px } = toPixel(t, 0);
+                ctx.fillText(t.toFixed(2), px, H - margin + 16);
+            }
+        }
+
+        drawZPlot();
+
+        // ── Camera basis orthonormalization ────────────────────────────
+        function drawBasisPlot() {
+            const canvas = document.getElementById('basisCanvas');
+            const ctx = canvas.getContext('2d');
+            const W = canvas.width;
+            const H = canvas.height;
+
+            const tiltDeg = parseFloat(document.getElementById('sliderTilt').value);
+            const tiltRad = (tiltDeg * Math.PI) / 180;
+
+            ctx.clearRect(0, 0, W, H);
+
+            // We view the scene looking along the "right" axis, so we see
+            // the forward–up plane. Forward is horizontal, up is vertical.
+            const cx = W * 0.4;
+            const cy = H * 0.55;
+            const len = 160;
+
+            // Forward direction: fixed, pointing right
+            const fwd = [1, 0];
+
+            // Up hint: 90° + tilt from forward (so 0 tilt = perfectly
+            // perpendicular, positive tilt = leaning toward forward)
+            const upHintAngle = Math.PI / 2 - tiltRad;
+            const upHint = [Math.cos(upHintAngle), Math.sin(upHintAngle)];
+
+            // Project upHint onto forward to show the parallel component
+            const dot = upHint[0] * fwd[0] + upHint[1] * fwd[1];
+            const parallelComp = [dot * fwd[0], dot * fwd[1]];
+
+            // camUp = upHint minus the parallel component (the perpendicular part)
+            // This is what the two cross products effectively compute.
+            const camUp = [upHint[0] - parallelComp[0], upHint[1] - parallelComp[1]];
+            const camUpLen = Math.sqrt(camUp[0] ** 2 + camUp[1] ** 2);
+            const camUpNorm = camUpLen > 0.001
+                ? [camUp[0] / camUpLen, camUp[1] / camUpLen]
+                : [0, 1];
+
+            function drawArrow(from, dir, length, color, lineWidth, label, labelSide) {
+                const to = [from[0] + dir[0] * length, from[1] - dir[1] * length];
+                const headLen = 12;
+                const angle = Math.atan2(-(dir[1] * length), dir[0] * length);
+
+                ctx.beginPath();
+                ctx.strokeStyle = color;
+                ctx.fillStyle = color;
+                ctx.lineWidth = lineWidth;
+                ctx.moveTo(from[0], from[1]);
+                ctx.lineTo(to[0], to[1]);
+                ctx.stroke();
+
+                // Arrowhead
+                ctx.beginPath();
+                ctx.moveTo(to[0], to[1]);
+                ctx.lineTo(
+                    to[0] - headLen * Math.cos(angle - 0.35),
+                    to[1] - headLen * Math.sin(angle - 0.35),
+                );
+                ctx.lineTo(
+                    to[0] - headLen * Math.cos(angle + 0.35),
+                    to[1] - headLen * Math.sin(angle + 0.35),
+                );
+                ctx.closePath();
+                ctx.fill();
+
+                // Label
+                if (label) {
+                    ctx.font = 'bold 14px Arial';
+                    ctx.textAlign = 'center';
+                    const offset = labelSide === 'left' ? -14 : 14;
+                    const lx = to[0] + (labelSide === 'left' ? -14 : labelSide === 'right' ? 14 : 0);
+                    const ly = to[1] + (labelSide === 'above' ? -10 : labelSide === 'below' ? 18 : 4);
+                    ctx.fillText(label, lx, ly);
+                }
+            }
+
+            // Draw the angle arc between forward and upHint
+            const arcRadius = 50;
+            const startAngle = 0; // forward is along +x
+            const endAngle = -upHintAngle; // canvas y is flipped
+            ctx.beginPath();
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            if (Math.abs(tiltDeg) > 1) {
+                // Arc from 90° to the actual upHint angle
+                const arc90 = -Math.PI / 2;
+                ctx.arc(cx, cy, arcRadius, Math.min(arc90, endAngle), Math.max(arc90, endAngle));
+                ctx.stroke();
+
+                // Label the tilt angle
+                const midAngle = (arc90 + endAngle) / 2;
+                ctx.fillStyle = '#999';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(
+                    `${Math.abs(tiltDeg)}°`,
+                    cx + (arcRadius + 16) * Math.cos(midAngle),
+                    cy + (arcRadius + 16) * Math.sin(midAngle) + 4,
+                );
+            }
+            ctx.setLineDash([]);
+
+            // Draw the right angle marker between forward and camUp
+            const raSize = 14;
+            ctx.beginPath();
+            ctx.strokeStyle = 'green';
+            ctx.lineWidth = 1.5;
+            ctx.moveTo(cx + raSize, cy);
+            ctx.lineTo(cx + raSize, cy - raSize);
+            ctx.lineTo(cx, cy - raSize);
+            ctx.stroke();
+
+            // Draw projection line (dashed) from upHint tip down to forward axis
+            const upHintTip = [cx + upHint[0] * len, cy - upHint[1] * len];
+            const projTip = [cx + parallelComp[0] * len, cy - parallelComp[1] * len];
+            ctx.beginPath();
+            ctx.strokeStyle = '#aaa';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            ctx.moveTo(upHintTip[0], upHintTip[1]);
+            ctx.lineTo(projTip[0], projTip[1]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw the parallel component along forward (what gets discarded)
+            if (Math.abs(dot) > 0.01) {
+                ctx.beginPath();
+                ctx.strokeStyle = '#ccc';
+                ctx.lineWidth = 3;
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(projTip[0], projTip[1]);
+                ctx.stroke();
+
+                // Label
+                ctx.fillStyle = '#999';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('discarded ∥ component', (cx + projTip[0]) / 2, cy + 20);
+            }
+
+            // Draw arrows: forward, upHint, camUp
+            drawArrow([cx, cy], fwd, len, 'blue', 3, 'forward', 'below');
+            drawArrow([cx, cy], upHint, len, '#e040a0', 2.5, 'up hint', 'left');
+            drawArrow([cx, cy], camUpNorm, len * 0.9, 'green', 3, 'camUp', 'left');
+
+            // Origin dot
+            ctx.beginPath();
+            ctx.fillStyle = '#333';
+            ctx.arc(cx, cy, 4, 0, 2 * Math.PI);
+            ctx.fill();
+
+            // Explanation text
+            ctx.fillStyle = '#333';
+            ctx.font = '13px Arial';
+            ctx.textAlign = 'left';
+            const tx = W * 0.62;
+            const lines = [
+                '1. forward is fixed (where we look)',
+                '2. right = cross(upHint, forward)',
+                '   → perpendicular to both (into screen)',
+                '3. camUp = cross(forward, right)',
+                '   → perpendicular to forward,',
+                '     same roll as the up hint',
+                '',
+                'The up hint controls the roll angle.',
+                'The cross products strip the component',
+                'parallel to forward, keeping only the',
+                'perpendicular part.',
+            ];
+            for (let i = 0; i < lines.length; i++) {
+                ctx.fillText(lines[i], tx, 60 + i * 20);
+            }
+        }
+
+        drawBasisPlot();
+
+        document.getElementById('sliderTilt').addEventListener('input', (e) => {
+            document.getElementById('valTilt').textContent = e.target.value;
+            drawBasisPlot();
+        });
+
+        for (const id of ['sliderKZ', 'sliderKC', 'sliderA', 'sliderB']) {
+            document.getElementById(id).addEventListener('input', (e) => {
+                const valId = 'val' + id.slice(6); // sliderKZ -> valKZ
+                document.getElementById(valId).textContent = parseFloat(e.target.value).toFixed(
+                    id === 'sliderKZ' || id === 'sliderKC' ? 1 : 2
+                );
+                drawZPlot();
+            });
+        }
+
+    </script>
+</body>
+</html>
