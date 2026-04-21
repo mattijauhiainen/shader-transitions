@@ -6,17 +6,17 @@ import fullscreenQuadVert from "./fullscreenQuad.vert.glsl" with {
 };
 import { LUMA } from "./luma.ts";
 import lumaRangesFrag from "./lumaRanges.frag.glsl" with { type: "text" };
-import { createCollapseTransition } from "./transitions/collapse.ts";
-import { createExplodeTransition } from "./transitions/explode.ts";
-import { createFlipTransition } from "./transitions/flip.ts";
-import { createMitosisTransition } from "./transitions/mitosis.ts";
-import { createOrbitTransition } from "./transitions/orbit.ts";
-import { createPageflipTransition } from "./transitions/pageflip.ts";
-import { createRadialTransition } from "./transitions/radial.ts";
-import { createRainTransition } from "./transitions/rain.ts";
-import { createShrinkTransition } from "./transitions/shrink.ts";
-import { createWalkTransition } from "./transitions/walk.ts";
-import { createWipeTransition } from "./transitions/wipe.ts";
+import { createCollapseTransition } from "./transitions/collapse/collapse.ts";
+import { createExplodeTransition } from "./transitions/explode/explode.ts";
+import { createFlipTransition } from "./transitions/flip/flip.ts";
+import { createMitosisTransition } from "./transitions/mitosis/mitosis.ts";
+import { createOrbitTransition } from "./transitions/orbit/orbit.ts";
+import { createPageflipTransition } from "./transitions/pageflip/pageflip.ts";
+import { createRadialTransition } from "./transitions/radial/radial.ts";
+import { createRainTransition } from "./transitions/rain/rain.ts";
+import { createShrinkTransition } from "./transitions/shrink/shrink.ts";
+import { createWalkTransition } from "./transitions/walk/walk.ts";
+import { createWipeTransition } from "./transitions/wipe/wipe.ts";
 
 export const CELL_SIZE = 5.0;
 export const PITCH = 6.0;

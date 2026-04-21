@@ -1,13 +1,13 @@
-import fullscreenQuadVert from "../fullscreenQuad.vert.glsl" with {
+import fullscreenQuadVert from "../../fullscreenQuad.vert.glsl" with {
   type: "text",
 };
-import { LUMA } from "../luma.ts";
+import { LUMA } from "../../luma.ts";
 import {
   CELL_SIZE,
   PITCH,
   type RendererContext,
   type Transition,
-} from "../renderer.ts";
+} from "../../renderer.ts";
 import fragSrc from "./radial.frag.glsl" with { type: "text" };
 
 export function createRadialTransition(ctx: RendererContext): Transition {

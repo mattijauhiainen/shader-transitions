@@ -1,10 +1,10 @@
-import { LUMA } from "../luma.ts";
+import { LUMA } from "../../luma.ts";
 import {
   CELL_SIZE,
   PITCH,
   type RendererContext,
   type Transition,
-} from "../renderer.ts";
+} from "../../renderer.ts";
 import fragSrc from "./collapse.frag.glsl" with { type: "text" };
 import vertSrc from "./collapse.vert.glsl" with { type: "text" };
 

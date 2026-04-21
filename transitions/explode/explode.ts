@@ -1,15 +1,14 @@
-import { easeIn } from "../easeIn.ts";
-import { LUMA } from "../luma.ts";
+import { LUMA } from "../../luma.ts";
 import {
   CELL_SIZE,
   PITCH,
   type RendererContext,
   type Transition,
-} from "../renderer.ts";
-import fragSrc from "./pageflip.frag.glsl" with { type: "text" };
-import vertSrc from "./pageflip.vert.glsl" with { type: "text" };
+} from "../../renderer.ts";
+import fragSrc from "./explode.frag.glsl" with { type: "text" };
+import vertSrc from "./explode.vert.glsl" with { type: "text" };
 
-export function createPageflipTransition(ctx: RendererContext): Transition {
+export function createExplodeTransition(ctx: RendererContext): Transition {
   const gl = ctx.gl;
 
   const program = ctx.createProgram(vertSrc, fragSrc);
@@ -41,7 +40,7 @@ export function createPageflipTransition(ctx: RendererContext): Transition {
 
   return {
     durationMs: 2500,
-    easing: easeIn,
+    easing: (t: number) => t,
     prepareRender: (_durationMs: number) => (t: number) => {
       gl.useProgram(program);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -55,7 +54,7 @@ export function createPageflipTransition(ctx: RendererContext): Transition {
       gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
       gl.bindVertexArray(vao);
 
-      // Pass 1: draw B dots (revealed region, flat)
+      // Pass 1: draw B dots (fading in)
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, ctx.next.cellTex);
       gl.activeTexture(gl.TEXTURE1);
@@ -63,7 +62,7 @@ export function createPageflipTransition(ctx: RendererContext): Transition {
       gl.uniform1i(uPhase, 1);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, totalInstances);
 
-      // Pass 2: draw A dots (curling page) on top
+      // Pass 2: draw A dots (exploding outward) on top
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, ctx.current.cellTex);
       gl.activeTexture(gl.TEXTURE1);

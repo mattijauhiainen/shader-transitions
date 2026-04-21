@@ -1,13 +1,13 @@
-import fullscreenQuadVert from "../fullscreenQuad.vert.glsl" with {
+import fullscreenQuadVert from "../../fullscreenQuad.vert.glsl" with {
   type: "text",
 };
-import { LUMA } from "../luma.ts";
+import { LUMA } from "../../luma.ts";
 import {
   CELL_SIZE,
   PITCH,
   type RendererContext,
   type Transition,
-} from "../renderer.ts";
+} from "../../renderer.ts";
 import fragSrc from "./walk.frag.glsl" with { type: "text" };
 
 const WALK_WINDOW = 0.1;

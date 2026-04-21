@@ -1,11 +1,11 @@
-import { easeInOut } from "../easeInOut.ts";
-import { LUMA } from "../luma.ts";
+import { easeInOut } from "../../easeInOut.ts";
+import { LUMA } from "../../luma.ts";
 import {
   CELL_SIZE,
   PITCH,
   type RendererContext,
   type Transition,
-} from "../renderer.ts";
+} from "../../renderer.ts";
 import fragSrc from "./flip.frag.glsl" with { type: "text" };
 import vertSrc from "./flip.vert.glsl" with { type: "text" };
 
