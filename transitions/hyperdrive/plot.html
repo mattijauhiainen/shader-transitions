@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Hyperdrive Plane Spacing Plot</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }
+        canvas { border: 1px solid #ccc; background-color: #f9f9f9; }
+        .controls { margin-bottom: 20px; text-align: center; }
+    </style>
+</head>
+<body>
+    <h1 style="margin-top: 40px;">Plane Spacing Curves (Hyperdrive)</h1>
+    <div class="controls">
+        <p>Three transforms stacked to produce variable plane spacing: wide at edges, tight in the middle.</p>
+        <p>
+            <code>linear = 1 - |2i - N| / N</code> &nbsp; (triangle wave, 0 &rarr; 1 &rarr; 0)
+        </p>
+        <p>
+            <code>distFromEdge = linear<sup>RAMP_BIAS</sup></code> &nbsp; (power curve, rushes toward 1)
+        </p>
+        <p>
+            <code>spacing = S_MAX &middot; (S_MIN / S_MAX)<sup>distFromEdge</sup></code> &nbsp; (log-space interp, S_MAX &rarr; S_MIN)
+        </p>
+        <div style="display: grid; grid-template-columns: auto auto auto; gap: 4px 12px; justify-content: center; align-items: center;">
+            <label for="sliderRamp">RAMP_BIAS</label>
+            <input type="range" id="sliderRamp" min="0.05" max="1.0" step="0.05" value="0.3">
+            <span id="valRamp">0.30</span>
+
+            <label for="sliderRatio">S_MIN / S_MAX</label>
+            <input type="range" id="sliderRatio" min="0.01" max="0.3" step="0.01" value="0.05">
+            <span id="valRatio">0.05</span>
+
+            <label for="sliderPlanes">TOTAL_PLANES</label>
+            <input type="range" id="sliderPlanes" min="20" max="160" step="2" value="80">
+            <span id="valPlanes">80</span>
+        </div>
+    </div>
+
+    <canvas id="plotCanvas" width="800" height="400"></canvas>
+
+    <script>
+        const canvas = document.getElementById('plotCanvas');
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width, H = canvas.height;
+        const PAD_L = 50, PAD_R = 20, PAD_T = 20, PAD_B = 40;
+        const plotW = W - PAD_L - PAD_R;
+        const plotH = H - PAD_T - PAD_B;
+
+        const sliderRamp = document.getElementById('sliderRamp');
+        const sliderRatio = document.getElementById('sliderRatio');
+        const sliderPlanes = document.getElementById('sliderPlanes');
+        const valRamp = document.getElementById('valRamp');
+        const valRatio = document.getElementById('valRatio');
+        const valPlanes = document.getElementById('valPlanes');
+
+        function draw() {
+            const RAMP_BIAS = parseFloat(sliderRamp.value);
+            const S_RATIO = parseFloat(sliderRatio.value);
+            const TOTAL = parseInt(sliderPlanes.value);
+            const N = TOTAL - 2;
+
+            valRamp.textContent = RAMP_BIAS.toFixed(2);
+            valRatio.textContent = S_RATIO.toFixed(2);
+            valPlanes.textContent = TOTAL;
+
+            const linear = [], powered = [], spacing = [];
+            for (let i = 0; i <= N; i++) {
+                const l = 1 - Math.abs(2 * i - N) / N;
+                linear.push(l);
+                const p = l ** RAMP_BIAS;
+                powered.push(p);
+                spacing.push(S_RATIO ** p);
+            }
+
+            ctx.clearRect(0, 0, W, H);
+
+            // Grid lines and Y labels
+            ctx.strokeStyle = '#ddd';
+            ctx.lineWidth = 1;
+            ctx.fillStyle = '#888';
+            ctx.font = '11px sans-serif';
+            ctx.textAlign = 'right';
+            for (let v = 0; v <= 1; v += 0.25) {
+                const y = PAD_T + plotH - v * plotH;
+                ctx.beginPath();
+                ctx.moveTo(PAD_L, y);
+                ctx.lineTo(PAD_L + plotW, y);
+                ctx.stroke();
+                ctx.fillText(v.toFixed(2), PAD_L - 8, y + 4);
+            }
+
+            // Axes
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(PAD_L, PAD_T);
+            ctx.lineTo(PAD_L, PAD_T + plotH);
+            ctx.lineTo(PAD_L + plotW, PAD_T + plotH);
+            ctx.stroke();
+
+            // X labels
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#888';
+            const step = N > 60 ? 10 : 5;
+            for (let i = 0; i <= N; i += step) {
+                const x = PAD_L + (i / N) * plotW;
+                ctx.fillText(i.toString(), x, PAD_T + plotH + 16);
+            }
+            ctx.fillText('gap index (i)', PAD_L + plotW / 2, PAD_T + plotH + 34);
+
+            function drawCurve(data, color, width, dash) {
+                ctx.strokeStyle = color;
+                ctx.lineWidth = width;
+                ctx.setLineDash(dash || []);
+                ctx.beginPath();
+                for (let i = 0; i <= N; i++) {
+                    const x = PAD_L + (i / N) * plotW;
+                    const y = PAD_T + plotH - data[i] * plotH;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            drawCurve(linear, '#aaa', 1.5, [6, 4]);
+            drawCurve(powered, '#e08020', 2.5, []);
+            drawCurve(spacing, '#2090d0', 2.5, []);
+
+            // Legend
+            const legend = [
+                { color: '#aaa', dash: [6, 4], w: 1.5,
+                  label: 'linear = 1 - |2i - N| / N' },
+                { color: '#e08020', dash: [], w: 2.5,
+                  label: `distFromEdge = linear ^ ${RAMP_BIAS.toFixed(2)}` },
+                { color: '#2090d0', dash: [], w: 2.5,
+                  label: `spacing = ${S_RATIO.toFixed(2)} ^ distFromEdge` },
+            ];
+            const lx = PAD_L + 16, ly = PAD_T + 16;
+            legend.forEach((item, i) => {
+                const y = ly + i * 22;
+                ctx.strokeStyle = item.color;
+                ctx.lineWidth = item.w;
+                ctx.setLineDash(item.dash);
+                ctx.beginPath();
+                ctx.moveTo(lx, y);
+                ctx.lineTo(lx + 36, y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.fillStyle = '#333';
+                ctx.textAlign = 'left';
+                ctx.font = '13px monospace';
+                ctx.fillText(item.label, lx + 44, y + 4);
+            });
+        }
+
+        sliderRamp.addEventListener('input', draw);
+        sliderRatio.addEventListener('input', draw);
+        sliderPlanes.addEventListener('input', draw);
+        draw();
+    </script>
+</body>
+</html>
