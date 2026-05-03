@@ -53,6 +53,8 @@ export interface Transition {
   dispose?: () => void;
 }
 
+export type NamedTransition = Transition & { name: string };
+
 export class Renderer implements RendererContext {
   readonly cols: number;
   readonly rows: number;
@@ -70,7 +72,7 @@ export class Renderer implements RendererContext {
   };
   private _current: HalftoneFrame;
   private _next: HalftoneFrame;
-  private _transitions: Transition[];
+  private _transitions: NamedTransition[];
   private quadVAO: WebGLVertexArrayObject;
 
   get current(): HalftoneFrame {
@@ -99,18 +101,18 @@ export class Renderer implements RendererContext {
     this._next = this.createHalftoneFrame();
 
     this._transitions = [
-      createRadialTransition(this),
-      createShrinkTransition(this),
-      createWipeTransition(this),
-      createWalkTransition(this),
-      createExplodeTransition(this),
-      createPageflipTransition(this),
-      createCollapseTransition(this),
-      createRainTransition(this),
-      createMitosisTransition(this),
-      createFlipTransition(this),
-      createOrbitTransition(this),
-      createHyperdriveTransition(this),
+      { name: "radial", ...createRadialTransition(this) },
+      { name: "shrink", ...createShrinkTransition(this) },
+      { name: "wipe", ...createWipeTransition(this) },
+      { name: "walk", ...createWalkTransition(this) },
+      { name: "explode", ...createExplodeTransition(this) },
+      { name: "pageflip", ...createPageflipTransition(this) },
+      { name: "collapse", ...createCollapseTransition(this) },
+      { name: "rain", ...createRainTransition(this) },
+      { name: "mitosis", ...createMitosisTransition(this) },
+      { name: "flip", ...createFlipTransition(this) },
+      { name: "orbit", ...createOrbitTransition(this) },
+      { name: "hyperdrive", ...createHyperdriveTransition(this) },
     ];
   }
 
@@ -153,7 +155,7 @@ export class Renderer implements RendererContext {
     [this._current, this._next] = [this._next, this._current];
   }
 
-  get transitions(): Transition[] {
+  get transitions(): NamedTransition[] {
     return this._transitions;
   }
 

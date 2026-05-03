@@ -1,6 +1,6 @@
 import { animateTo } from "./animateTo.ts";
 import { loadImage } from "./loadImage.ts";
-import { Renderer } from "./renderer.ts";
+import { type NamedTransition, Renderer } from "./renderer.ts";
 import { sleep } from "./sleep.ts";
 
 const PAUSE = 500;
@@ -13,7 +13,7 @@ const gl = canvas.getContext("webgl2")!;
 
 try {
   const renderer = new Renderer(gl, canvas.width, canvas.height);
-  const transitions = renderer.transitions;
+  const transitions = filterTransitions(renderer.transitions);
 
   async function runSlideshow(paths: string[]) {
     shuffle(paths);
@@ -50,6 +50,23 @@ try {
     "color:red;padding:2em;font-family:monospace;white-space:pre-wrap";
   document.body.textContent = String(e);
   throw e;
+}
+
+function filterTransitions(transitions: NamedTransition[]): NamedTransition[] {
+  const param = new URLSearchParams(location.search).get("transitions");
+  if (!param) return transitions;
+  const wanted = param
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const known = new Set(transitions.map((t) => t.name));
+  const unknown = wanted.filter((n) => !known.has(n));
+  if (unknown.length > 0) {
+    throw new Error(
+      `Unknown transition(s): ${unknown.join(", ")}. Known: ${[...known].join(", ")}`,
+    );
+  }
+  return transitions.filter((t) => wanted.includes(t.name));
 }
 
 function shuffle<T>(arr: T[]): T[] {
