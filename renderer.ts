@@ -9,6 +9,7 @@ import lumaRangesFrag from "./lumaRanges.frag.glsl" with { type: "text" };
 import { createCollapseTransition } from "./transitions/collapse/collapse.ts";
 import { createExplodeTransition } from "./transitions/explode/explode.ts";
 import { createFlipTransition } from "./transitions/flip/flip.ts";
+import { createFreefallTransition } from "./transitions/freefall/freefall.ts";
 import { createHyperdriveTransition } from "./transitions/hyperdrive/hyperdrive.ts";
 import { createMitosisTransition } from "./transitions/mitosis/mitosis.ts";
 import { createOrbitTransition } from "./transitions/orbit/orbit.ts";
@@ -113,6 +114,7 @@ export class Renderer implements RendererContext {
       { name: "flip", ...createFlipTransition(this) },
       { name: "orbit", ...createOrbitTransition(this) },
       { name: "hyperdrive", ...createHyperdriveTransition(this) },
+      { name: "freefall", ...createFreefallTransition(this) },
     ];
   }
 

@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Freefall — camera angle curves</title>
+<style>
+  body {
+    font-family: ui-monospace, monospace;
+    background: #111;
+    color: #ddd;
+    margin: 1.5em;
+    line-height: 1.4;
+  }
+  h2 { margin: 0 0 0.2em; }
+  h3 { margin: 1.5em 0 0.4em; color: #ccc; font-size: 1em; }
+  .sub { color: #888; font-size: 0.85em; margin: 0 0 1em; }
+  canvas {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    display: block;
+    margin: 0.4em 0 0;
+  }
+  table {
+    border-collapse: collapse;
+    font-size: 0.85em;
+    margin-bottom: 0.4em;
+  }
+  th, td {
+    padding: 0.15em 0.4em;
+    text-align: left;
+  }
+  th {
+    color: #888;
+    font-weight: normal;
+    border-bottom: 1px solid #333;
+  }
+  input[type="number"] {
+    width: 5em;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    color: #ddd;
+    font-family: inherit;
+    font-size: inherit;
+    padding: 0.15em 0.3em;
+  }
+  input[type="number"]:focus { outline: 1px solid #5af; }
+  button {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    color: #aaa;
+    font-family: inherit;
+    font-size: 0.8em;
+    padding: 0.2em 0.6em;
+    cursor: pointer;
+    margin-right: 0.3em;
+  }
+  button:hover { background: #222; color: #ddd; }
+  .legend-row {
+    display: flex;
+    gap: 1.2em;
+    font-size: 0.8em;
+    color: #aaa;
+    margin: 0.3em 0 0.4em;
+    flex-wrap: wrap;
+  }
+  .swatch { display: inline-block; width: 1em; height: 0.8em; vertical-align: middle; margin-right: 0.3em; border: 1px solid #333; }
+  .row-actions button {
+    padding: 0 0.4em;
+    font-size: 0.9em;
+    line-height: 1.2em;
+  }
+  pre {
+    color: #888;
+    font-size: 0.8em;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    padding: 0.6em 0.8em;
+    margin-top: 1em;
+    white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+<h2>Freefall — camera angle curves</h2>
+<p class="sub">
+  Edit keyframe times (t ∈ [0,1]) and values (in multiples of π) below each plot. Curves update live.
+  Mirror your final values back into <code>freefall.ts</code>.
+</p>
+
+<div class="legend-row">
+  <span><span class="swatch" style="background:#5af"></span>keyframe</span>
+  <span><span class="swatch" style="background:#fc5"></span>plane-0 crossing (~t=0.10)</span>
+  <span><span class="swatch" style="background:#5f5"></span>interpolated curve</span>
+</div>
+
+<div id="curves"></div>
+
+<h3>3D scene — drag to rotate, slide to scrub time</h3>
+<canvas id="scene3d" width="960" height="520"></canvas>
+<div style="margin: 0.6em 0;">
+  <input type="range" id="time-slider" min="0" max="1000" value="0"
+         style="width: 80%; vertical-align: middle;" />
+  <span id="time-readout" style="margin-left: 0.6em; color: #aaa;">t = 0.000</span>
+</div>
+<pre id="pose-readout"></pre>
+
+<div style="display: flex; align-items: center; gap: 0.6em; margin-top: 1em;">
+  <h3 style="margin: 0;">Paste into freefall.ts</h3>
+  <button id="copy-keys">copy</button>
+  <span id="copy-status" style="color:#5f5; font-size:0.8em;"></span>
+</div>
+<pre id="export"></pre>
+
+<script>
+// Default keyframes — "freefall, tumble, then stabilize". Pitch flips a
+// few times early then settles; roll keeps spinning a little longer and
+// bleeds off. Yaw is unused.
+const defaults = {
+  pitch: [
+    { t: 0.0, value: 0 },
+    { t: 0.06, value: 0 },
+    { t: 0.20, value: 1 }, // π — first half-flip
+    { t: 0.65, value: 4 }, // 4π — tumbles done
+    { t: 1.0, value: 4 },
+  ],
+  yaw: [
+    { t: 0.0, value: 0 },
+    { t: 1.0, value: 0 },
+  ],
+  roll: [
+    { t: 0.0, value: 0 },
+    { t: 0.06, value: 0 },
+    { t: 0.20, value: 0.7 }, // tracking pitch's first flip
+    { t: 0.95, value: 4 }, // 4π — spin bleeds off slightly later than pitch
+    { t: 1.0, value: 4 },
+  ],
+};
+
+// Working state — values are in units of π for human input.
+const state = {
+  pitch: defaults.pitch.map(k => ({ ...k })),
+  yaw: defaults.yaw.map(k => ({ ...k })),
+  roll: defaults.roll.map(k => ({ ...k })),
+};
+
+function tangentAt(keys, i) {
+  if (i === 0 || i === keys.length - 1) return 0;
+  const slopeLeft = (keys[i].value - keys[i - 1].value) / (keys[i].t - keys[i - 1].t);
+  const slopeRight = (keys[i + 1].value - keys[i].value) / (keys[i + 1].t - keys[i].t);
+  if (slopeLeft === 0 || slopeRight === 0) return 0;
+  return (slopeLeft + slopeRight) * 0.5;
+}
+
+function evalCurve(keys, t) {
+  if (keys.length === 0) return 0;
+  if (t <= keys[0].t) return keys[0].value;
+  if (t >= keys[keys.length - 1].t) return keys[keys.length - 1].value;
+  let i = 0;
+  while (keys[i + 1].t < t) i++;
+  const k0 = keys[i], k1 = keys[i + 1];
+  const dt = k1.t - k0.t;
+  if (dt === 0) return k1.value;
+  const s = (t - k0.t) / dt;
+  const s2 = s * s, s3 = s2 * s;
+  const m0 = tangentAt(keys, i);
+  const m1 = tangentAt(keys, i + 1);
+  return (
+    (2 * s3 - 3 * s2 + 1) * k0.value +
+    (s3 - 2 * s2 + s) * m0 * dt +
+    (-2 * s3 + 3 * s2) * k1.value +
+    (s3 - s2) * m1 * dt
+  );
+}
+
+// --- Plot ---
+const W = 960, H = 240;
+const PADL = 60, PADR = 30, PADT = 20, PADB = 30;
+
+function plot(canvas, keys, yMin, yMax, yTicks) {
+  const c = canvas.getContext('2d');
+  c.fillStyle = '#1a1a1a';
+  c.fillRect(0, 0, W, H);
+  const x0 = PADL, x1 = W - PADR;
+  const y0 = PADT, y1 = H - PADB;
+  const xt = t => x0 + (x1 - x0) * t;
+  const yv = v => y1 - (y1 - y0) * ((v - yMin) / (yMax - yMin));
+
+  // Plane-0 crossing marker
+  c.strokeStyle = '#fc5';
+  c.setLineDash([4, 3]);
+  c.lineWidth = 1;
+  c.beginPath();
+  c.moveTo(xt(0.103), y0);
+  c.lineTo(xt(0.103), y1);
+  c.stroke();
+  c.setLineDash([]);
+
+  // Y grid
+  c.font = '11px ui-monospace, monospace';
+  c.textAlign = 'right';
+  c.textBaseline = 'middle';
+  for (const tk of yTicks) {
+    const y = yv(tk.value);
+    c.strokeStyle = tk.bold ? '#444' : '#2a2a2a';
+    c.beginPath();
+    c.moveTo(x0, y);
+    c.lineTo(x1, y);
+    c.stroke();
+    c.fillStyle = '#888';
+    c.fillText(tk.label, x0 - 8, y);
+  }
+
+  // X grid
+  c.textAlign = 'center';
+  c.textBaseline = 'top';
+  for (let i = 0; i <= 10; i++) {
+    const t = i / 10;
+    const x = xt(t);
+    c.strokeStyle = '#2a2a2a';
+    c.beginPath();
+    c.moveTo(x, y0);
+    c.lineTo(x, y1);
+    c.stroke();
+    c.fillStyle = '#777';
+    c.fillText(t.toFixed(1), x, y1 + 4);
+  }
+
+  // Curve (values in units of π)
+  c.strokeStyle = '#5f5';
+  c.lineWidth = 2;
+  c.beginPath();
+  const N = 1500;
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    const v = evalCurve(keys, t);
+    const x = xt(t);
+    const y = yv(v);
+    if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+  }
+  c.stroke();
+
+  // Keyframe dots
+  for (const k of keys) {
+    const x = xt(k.t);
+    const y = yv(k.value);
+    c.fillStyle = '#5af';
+    c.beginPath();
+    c.arc(x, y, 4, 0, Math.PI * 2);
+    c.fill();
+  }
+
+  // Frame
+  c.strokeStyle = '#444';
+  c.lineWidth = 1;
+  c.strokeRect(x0, y0, x1 - x0, y1 - y0);
+}
+
+// --- UI ---
+const curveSpecs = [
+  {
+    name: 'pitch',
+    title: 'pitch (radians, ×π) — head tilts back, then spirals',
+    yMin: -0.2, yMax: 4.2,
+    yTicks: [
+      { value: 0,   label: '0',   bold: true },
+      { value: 0.5, label: 'π/2', bold: true },
+      { value: 1,   label: 'π',   bold: true },
+      { value: 2,   label: '2π' },
+      { value: 3,   label: '3π' },
+      { value: 4,   label: '4π',  bold: true },
+    ],
+  },
+  {
+    name: 'yaw',
+    title: 'yaw (radians, ×π) — gaze sweeps to top-left and back',
+    yMin: -0.05, yMax: 0.3,
+    yTicks: [
+      { value: 0,    label: '0',   bold: true },
+      { value: 0.125,label: 'π/8' },
+      { value: 0.25, label: 'π/4', bold: true },
+    ],
+  },
+  {
+    name: 'roll',
+    title: 'roll (radians, ×π) — spiral around camera forward axis',
+    yMin: -0.2, yMax: 4.2,
+    yTicks: [
+      { value: 0, label: '0',  bold: true },
+      { value: 1, label: 'π' },
+      { value: 2, label: '2π' },
+      { value: 3, label: '3π' },
+      { value: 4, label: '4π', bold: true },
+    ],
+  },
+];
+
+const containers = {};
+
+function buildCurveBlock(spec) {
+  const wrap = document.createElement('div');
+  wrap.className = 'curve-block';
+
+  const h = document.createElement('h3');
+  h.textContent = spec.title;
+  wrap.appendChild(h);
+
+  // Editable table
+  const table = document.createElement('table');
+  table.innerHTML = `
+    <thead><tr>
+      <th>t</th><th>v (×π)</th><th></th>
+    </tr></thead>
+    <tbody id="${spec.name}-rows"></tbody>
+  `;
+  wrap.appendChild(table);
+
+  const buttons = document.createElement('div');
+  const addBtn = document.createElement('button');
+  addBtn.textContent = '+ add keyframe';
+  addBtn.onclick = () => {
+    const last = state[spec.name][state[spec.name].length - 1];
+    state[spec.name].push({ t: Math.min(1, last.t + 0.05), value: last.value });
+    sortAndRefresh(spec.name);
+  };
+  buttons.appendChild(addBtn);
+
+  const resetBtn = document.createElement('button');
+  resetBtn.textContent = 'reset';
+  resetBtn.onclick = () => {
+    state[spec.name] = defaults[spec.name].map(k => ({ ...k }));
+    sortAndRefresh(spec.name);
+  };
+  buttons.appendChild(resetBtn);
+  wrap.appendChild(buttons);
+
+  // Canvas
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  wrap.appendChild(canvas);
+
+  containers[spec.name] = { table: table.querySelector('tbody'), canvas, spec };
+
+  document.getElementById('curves').appendChild(wrap);
+}
+
+function rebuildRows(name) {
+  const tbody = containers[name].table;
+  tbody.innerHTML = '';
+  state[name].forEach((k, idx) => {
+    const tr = document.createElement('tr');
+
+    const tdT = document.createElement('td');
+    const inT = document.createElement('input');
+    inT.type = 'number';
+    inT.step = 0.01;
+    inT.min = 0;
+    inT.max = 1;
+    inT.value = k.t;
+    inT.oninput = () => {
+      const v = Number.parseFloat(inT.value);
+      if (!Number.isNaN(v)) {
+        state[name][idx].t = v;
+        redraw(name);
+      }
+    };
+    inT.onblur = () => sortAndRefresh(name);
+    tdT.appendChild(inT);
+    tr.appendChild(tdT);
+
+    const tdV = document.createElement('td');
+    const inV = document.createElement('input');
+    inV.type = 'number';
+    inV.step = 0.05;
+    inV.value = k.value;
+    inV.oninput = () => {
+      const v = Number.parseFloat(inV.value);
+      if (!Number.isNaN(v)) {
+        state[name][idx].value = v;
+        redraw(name);
+      }
+    };
+    tdV.appendChild(inV);
+    tr.appendChild(tdV);
+
+    const tdAct = document.createElement('td');
+    tdAct.className = 'row-actions';
+    const rm = document.createElement('button');
+    rm.textContent = '×';
+    rm.title = 'remove';
+    rm.onclick = () => {
+      if (state[name].length > 2) {
+        state[name].splice(idx, 1);
+        sortAndRefresh(name);
+      }
+    };
+    tdAct.appendChild(rm);
+    tr.appendChild(tdAct);
+
+    tbody.appendChild(tr);
+  });
+}
+
+function sortAndRefresh(name) {
+  state[name].sort((a, b) => a.t - b.t);
+  rebuildRows(name);
+  redraw(name);
+}
+
+function redraw(name) {
+  const { canvas, spec } = containers[name];
+  // Convert state values (×π) to actual radians for the plot — we plot in
+  // ×π units directly so we can keep the y-axis labels in nice fractions.
+  plot(canvas, state[name], spec.yMin, spec.yMax, spec.yTicks);
+  updateExport();
+}
+
+function buildExport() {
+  const fmt = (k) => `{ t: ${k.t}, value: ${k.value === 0 ? '0' : k.value + ' * Math.PI'} }`;
+  const block = (name) =>
+    `const ${name}Keys: Keyframe[] = [\n` +
+    state[name].map(k => `  ${fmt(k)},`).join('\n') +
+    `\n];`;
+  return block('pitch') + '\n\n' + block('yaw') + '\n\n' + block('roll');
+}
+
+function updateExport() {
+  document.getElementById('export').textContent = buildExport();
+}
+
+document.getElementById('copy-keys').addEventListener('click', async () => {
+  const status = document.getElementById('copy-status');
+  try {
+    await navigator.clipboard.writeText(buildExport());
+    status.textContent = 'copied!';
+    status.style.color = '#5f5';
+  } catch (e) {
+    status.textContent = `copy failed: ${e.message}`;
+    status.style.color = '#f88';
+  }
+  setTimeout(() => { status.textContent = ''; }, 1500);
+});
+
+// --- 3D scene viewer ---
+// camTrajectory: same smoothstep curve as freefall.ts.
+function camTrajectory(t) {
+  return t * t * (3 - 2 * t);
+}
+
+// Layout in normalized units (focalLen = 1, PLANE_SPACING = 8).
+const PS = 8;
+const camStart = -1;
+const planeZs = [0, PS, 2*PS, 3*PS, 4*PS, 4*PS + 1.5];
+const finalPlaneZ = planeZs[planeZs.length - 1];
+const camRest = finalPlaneZ - 1;
+const totalTravel = camRest - camStart;
+const sceneCenterZ = (camStart + camRest) / 2;
+
+function getPose(t) {
+  const camZ = camStart + totalTravel * camTrajectory(t);
+  const pitch = evalCurve(state.pitch, t) * Math.PI;
+  const yaw = evalCurve(state.yaw, t) * Math.PI;
+  const roll = evalCurve(state.roll, t) * Math.PI;
+  const ca = Math.cos(pitch), sa = Math.sin(pitch);
+  const cb = Math.cos(yaw),   sb = Math.sin(yaw);
+  const cg = Math.cos(roll),  sg = Math.sin(roll);
+  // Camera basis in world coords: rows of the world→cam matrix.
+  // forward = R^T·(0,0,1) = (R[2,0], R[2,1], R[2,2])
+  // up      = R^T·(0,1,0) = (R[1,0], R[1,1], R[1,2])
+  // right   = R^T·(1,0,0) = (R[0,0], R[0,1], R[0,2])
+  const fwd   = { x: -ca*sb,        y: sa,    z: ca*cb };
+  const up    = { x: sg*cb + cg*sa*sb, y: cg*ca, z: sg*sb - cg*sa*cb };
+  const right = { x: cg*cb - sg*sa*sb, y: -sg*ca, z: cg*sb + sg*sa*cb };
+  return { camZ, pitch, yaw, roll, fwd, up, right };
+}
+
+const scene = document.getElementById('scene3d');
+let viewYaw = 0.7;    // around world Y (positive: Z goes right on screen)
+let viewPitch = 0.25; // around world X (positive: looking down at the scene)
+let viewerT = 0;
+
+function project3d(p) {
+  const cy = Math.cos(viewYaw), sy = Math.sin(viewYaw);
+  const cp = Math.cos(viewPitch), sp = Math.sin(viewPitch);
+  // Center the camera path on the origin so rotation is around its middle.
+  const z = p.z - sceneCenterZ;
+  // Yaw around Y, then pitch around X.
+  const x1 = p.x * cy + z * sy;
+  const z1 = -p.x * sy + z * cy;
+  const y1 = p.y;
+  const y2 = y1 * cp - z1 * sp;
+  const z2 = y1 * sp + z1 * cp;
+  const scale = 22;
+  return {
+    x: scene.width / 2 + scale * x1,
+    y: scene.height / 2 - scale * y2,
+    depth: z2,
+  };
+}
+
+function drawArrow(c, fromP, toP, color, width) {
+  c.strokeStyle = color;
+  c.fillStyle = color;
+  c.lineWidth = width;
+  c.beginPath();
+  c.moveTo(fromP.x, fromP.y);
+  c.lineTo(toP.x, toP.y);
+  c.stroke();
+  // Arrowhead
+  const dx = toP.x - fromP.x, dy = toP.y - fromP.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1) return;
+  const ux = dx / len, uy = dy / len;
+  const head = 8;
+  const px = -uy, py = ux;
+  c.beginPath();
+  c.moveTo(toP.x, toP.y);
+  c.lineTo(toP.x - ux*head + px*head*0.4, toP.y - uy*head + py*head*0.4);
+  c.lineTo(toP.x - ux*head - px*head*0.4, toP.y - uy*head - py*head*0.4);
+  c.closePath();
+  c.fill();
+}
+
+function drawScene() {
+  const c = scene.getContext('2d');
+  c.fillStyle = '#1a1a1a';
+  c.fillRect(0, 0, scene.width, scene.height);
+
+  const pose = getPose(viewerT);
+
+  // Camera path (dashed line)
+  const pathStart = project3d({ x: 0, y: 0, z: camStart });
+  const pathEnd = project3d({ x: 0, y: 0, z: camRest });
+  c.strokeStyle = '#333';
+  c.lineWidth = 1;
+  c.setLineDash([3, 3]);
+  c.beginPath();
+  c.moveTo(pathStart.x, pathStart.y);
+  c.lineTo(pathEnd.x, pathEnd.y);
+  c.stroke();
+  c.setLineDash([]);
+
+  // Planes — back-to-front by depth
+  const planeSize = 4.5;
+  const planeItems = planeZs.map((z, idx) => {
+    const corners = [
+      { x: -planeSize, y: -planeSize, z },
+      { x:  planeSize, y: -planeSize, z },
+      { x:  planeSize, y:  planeSize, z },
+      { x: -planeSize, y:  planeSize, z },
+    ].map(project3d);
+    const avgDepth = (corners[0].depth + corners[2].depth) / 2;
+    return { idx, z, corners, avgDepth };
+  });
+  planeItems.sort((a, b) => a.avgDepth - b.avgDepth);
+  for (const pl of planeItems) {
+    const isEntry = pl.idx === 0;
+    const isFinal = pl.idx === planeZs.length - 1;
+    c.strokeStyle = isFinal ? '#fc5' : isEntry ? '#5af' : '#555';
+    c.lineWidth = isFinal || isEntry ? 1.5 : 1;
+    c.beginPath();
+    pl.corners.forEach((p, i) => {
+      if (i === 0) c.moveTo(p.x, p.y); else c.lineTo(p.x, p.y);
+    });
+    c.closePath();
+    c.stroke();
+    c.fillStyle = '#666';
+    c.font = '10px ui-monospace, monospace';
+    c.textAlign = 'left';
+    c.textBaseline = 'middle';
+    const label = isFinal ? 'final' : `p${pl.idx}`;
+    c.fillText(label, pl.corners[1].x + 4, pl.corners[1].y);
+  }
+
+  // Camera position + orientation gizmo
+  const camPos = { x: 0, y: 0, z: pose.camZ };
+  const camProj = project3d(camPos);
+  const arrowLen = 3;
+  const upLen = 1.8;
+  const rightLen = 1.8;
+  const fwdEnd = project3d({
+    x: arrowLen * pose.fwd.x,
+    y: arrowLen * pose.fwd.y,
+    z: pose.camZ + arrowLen * pose.fwd.z,
+  });
+  const upEnd = project3d({
+    x: upLen * pose.up.x,
+    y: upLen * pose.up.y,
+    z: pose.camZ + upLen * pose.up.z,
+  });
+  const rightEnd = project3d({
+    x: rightLen * pose.right.x,
+    y: rightLen * pose.right.y,
+    z: pose.camZ + rightLen * pose.right.z,
+  });
+
+  // Camera body
+  c.fillStyle = '#fff';
+  c.beginPath();
+  c.arc(camProj.x, camProj.y, 5, 0, Math.PI * 2);
+  c.fill();
+
+  drawArrow(c, camProj, fwdEnd, '#f55', 2.5);   // forward (red)
+  drawArrow(c, camProj, upEnd, '#5f5', 2);      // up (green)
+  drawArrow(c, camProj, rightEnd, '#5af', 2);   // right (blue)
+
+  // Legend
+  c.font = '11px ui-monospace, monospace';
+  c.textAlign = 'left';
+  c.textBaseline = 'top';
+  let ly = 12;
+  const legendItems = [
+    { color: '#f55', label: 'forward (gaze)' },
+    { color: '#5f5', label: 'up' },
+    { color: '#5af', label: 'right' },
+    { color: '#5af', label: 'plane 0 (entry)' },
+    { color: '#fc5', label: 'final plane' },
+  ];
+  for (const it of legendItems) {
+    c.fillStyle = it.color;
+    c.fillRect(12, ly, 10, 10);
+    c.fillStyle = '#aaa';
+    c.fillText(it.label, 28, ly);
+    ly += 14;
+  }
+
+  // Pose readout
+  document.getElementById('pose-readout').textContent =
+    `camZ  = ${pose.camZ.toFixed(3)}    (${(camTrajectory(viewerT) * 100).toFixed(1)}% of fall)
+pitch = ${(pose.pitch / Math.PI).toFixed(3)}π
+yaw   = ${(pose.yaw / Math.PI).toFixed(3)}π
+roll  = ${(pose.roll / Math.PI).toFixed(3)}π
+fwd   = (${pose.fwd.x.toFixed(2)}, ${pose.fwd.y.toFixed(2)}, ${pose.fwd.z.toFixed(2)})`;
+}
+
+// Slider
+const slider = document.getElementById('time-slider');
+const readout = document.getElementById('time-readout');
+slider.addEventListener('input', () => {
+  viewerT = Number(slider.value) / 1000;
+  readout.textContent = `t = ${viewerT.toFixed(3)}`;
+  drawScene();
+});
+
+// Drag to rotate the 3D view
+let dragging = false, dragX = 0, dragY = 0, startYaw = 0, startPitch = 0;
+scene.style.cursor = 'grab';
+scene.addEventListener('pointerdown', e => {
+  dragging = true;
+  dragX = e.clientX; dragY = e.clientY;
+  startYaw = viewYaw; startPitch = viewPitch;
+  scene.style.cursor = 'grabbing';
+  scene.setPointerCapture(e.pointerId);
+});
+scene.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  viewYaw = startYaw + (e.clientX - dragX) * 0.005;
+  viewPitch = Math.max(-1.4, Math.min(1.4, startPitch + (e.clientY - dragY) * 0.005));
+  drawScene();
+});
+scene.addEventListener('pointerup', e => {
+  dragging = false;
+  scene.style.cursor = 'grab';
+  scene.releasePointerCapture(e.pointerId);
+});
+
+// Hook 3D scene into curve redraws so editing keyframes updates the pose live.
+const origRedraw = redraw;
+redraw = function(name) {
+  origRedraw(name);
+  drawScene();
+};
+
+// Boot
+for (const spec of curveSpecs) {
+  buildCurveBlock(spec);
+}
+for (const name of ['pitch', 'yaw', 'roll']) {
+  rebuildRows(name);
+  redraw(name);
+}
+drawScene();
+</script>
+</body>
+</html>

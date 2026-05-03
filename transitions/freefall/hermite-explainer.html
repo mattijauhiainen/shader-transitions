@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Cubic Hermite Interpolation — A Textbook Walkthrough</title>
+<style>
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    max-width: 760px;
+    margin: 2rem auto;
+    padding: 0 1.25rem;
+    line-height: 1.6;
+    color: #222;
+    background: #fdfdfa;
+  }
+  h1, h2, h3 { font-family: "Helvetica Neue", Arial, sans-serif; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: .3rem; }
+  h2 { margin-top: 2.4rem; border-bottom: 1px solid #ccc; padding-bottom: .2rem; }
+  code, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.95em; }
+  pre {
+    background: #f3f1ea;
+    padding: .8rem 1rem;
+    overflow-x: auto;
+    border-left: 3px solid #888;
+  }
+  .matrix {
+    display: inline-block;
+    vertical-align: middle;
+    margin: 0 .3em;
+    border-left: 2px solid #333;
+    border-right: 2px solid #333;
+    padding: 2px 4px;
+  }
+  .matrix table { border-collapse: collapse; }
+  .matrix td {
+    padding: 2px 10px;
+    text-align: center;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+  }
+  figure {
+    margin: 1.5rem auto;
+    text-align: center;
+  }
+  figcaption {
+    font-size: 0.9em;
+    color: #555;
+    margin-top: .4rem;
+    font-style: italic;
+  }
+  svg { max-width: 100%; height: auto; }
+  .key { background: #fff7d6; padding: .1em .35em; border-radius: 3px; }
+  table.basis { border-collapse: collapse; margin: 1rem auto; }
+  table.basis td, table.basis th {
+    border: 1px solid #aaa;
+    padding: .35rem .7rem;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    text-align: center;
+  }
+  table.basis th { background: #ece8db; font-family: "Helvetica Neue", sans-serif; }
+</style>
+</head>
+<body>
+
+<h1>Cubic Hermite Interpolation</h1>
+<p><em>A textbook walkthrough of the math behind <code>evalCurve</code>: how four numbers (two values and two slopes) are turned into a smooth curve, and why the basis polynomials look the way they do.</em></p>
+
+<h2>1. The problem</h2>
+
+<p>We have a list of keyframes — pairs <code>(t, v)</code> — and we want a smooth function <code>f(t)</code> that passes through every keyframe. "Smooth" specifically means: no kinks (the slope is continuous across keyframes) and the curve does not wiggle wildly between keys.</p>
+
+<p>Linear interpolation is the simplest answer:</p>
+
+<figure>
+<svg viewBox="0 0 460 180" xmlns="http://www.w3.org/2000/svg">
+  <line x1="40" y1="150" x2="430" y2="150" stroke="#888"/>
+  <line x1="40" y1="20"  x2="40"  y2="150" stroke="#888"/>
+  <text x="430" y="165" font-size="11" font-family="serif" font-style="italic">t</text>
+  <text x="25"  y="20"  font-size="11" font-family="serif" font-style="italic">v</text>
+  <!-- linear segments through 4 keyframes -->
+  <polyline points="60,120 160,40 260,90 380,55" fill="none" stroke="#c0392b" stroke-width="2"/>
+  <g fill="#333">
+    <circle cx="60" cy="120" r="4"/>
+    <circle cx="160" cy="40" r="4"/>
+    <circle cx="260" cy="90" r="4"/>
+    <circle cx="380" cy="55" r="4"/>
+  </g>
+  <text x="200" y="170" font-size="11" font-family="serif">linear interpolation: kinks at every keyframe</text>
+</svg>
+</figure>
+
+<p>It hits every key, but the slope jumps abruptly at each one. For a camera animation that's visible as a sudden change in angular velocity — the camera looks "twitchy." We need something that interpolates the value <em>and</em> the slope at each keyframe.</p>
+
+<h2>2. The Hermite idea: specify value and slope at both ends</h2>
+
+<p>Take a single segment between two keyframes. We will demand four things of it:</p>
+
+<ol>
+  <li>At the left end, the curve has value <strong>p<sub>0</sub></strong>.</li>
+  <li>At the right end, the curve has value <strong>p<sub>1</sub></strong>.</li>
+  <li>At the left end, the curve has slope <strong>m<sub>0</sub></strong>.</li>
+  <li>At the right end, the curve has slope <strong>m<sub>1</sub></strong>.</li>
+</ol>
+
+<p>Four conditions means four unknowns. The next section turns those four conditions into four equations and solves them.</p>
+
+<figure>
+<svg viewBox="0 0 460 220" xmlns="http://www.w3.org/2000/svg">
+  <line x1="40" y1="180" x2="430" y2="180" stroke="#888"/>
+  <line x1="40" y1="20"  x2="40"  y2="180" stroke="#888"/>
+  <!-- left key -->
+  <circle cx="100" cy="140" r="5" fill="#333"/>
+  <text x="80" y="160" font-size="13" font-family="serif">p₀</text>
+  <!-- left slope arrow -->
+  <line x1="100" y1="140" x2="160" y2="100" stroke="#2980b9" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="170" y="100" font-size="13" font-family="serif" fill="#2980b9">m₀</text>
+  <!-- right key -->
+  <circle cx="380" cy="60" r="5" fill="#333"/>
+  <text x="390" y="55" font-size="13" font-family="serif">p₁</text>
+  <!-- right slope arrow -->
+  <line x1="380" y1="60" x2="430" y2="80" stroke="#2980b9" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="365" y="100" font-size="13" font-family="serif" fill="#2980b9">m₁</text>
+  <!-- the cubic curve -->
+  <path d="M 100 140 C 200 60, 290 40, 380 60" fill="none" stroke="#c0392b" stroke-width="2"/>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2980b9"/>
+    </marker>
+  </defs>
+  <text x="160" y="210" font-size="11" font-family="serif">cubic Hermite segment: matches value AND slope at each end</text>
+</svg>
+</figure>
+
+<h2>3. Working on the unit interval</h2>
+
+<p>Real keyframes can be anywhere on the timeline, with arbitrary spacing. To keep the algebra clean, we first solve the problem on the unit interval s ∈ [0, 1] and then map back. Define</p>
+
+<p style="text-align:center"><code>s = (t − t₀) / (t₁ − t₀)</code></p>
+
+<p>so s = 0 at the left keyframe and s = 1 at the right.</p>
+
+<h3>What does "look for a function" mean?</h3>
+
+<p>We don't know yet what f looks like. The strategy is to pick a <em>family</em> of candidate functions controlled by some unknown numbers, and then solve for the unknowns that make our four conditions hold. Concretely:</p>
+
+<ol>
+  <li>Pick a template — a formula with placeholder constants in it.</li>
+  <li>Plug in the four conditions; each one becomes an equation in those constants.</li>
+  <li>Solve the system. The values that pop out give us our specific function.</li>
+</ol>
+
+<p>For this to work, the template must have <strong>at least four free constants</strong> (one per condition) — otherwise we'd be over-constrained and the system would have no solution. It also helps if it has <strong>exactly four</strong>, so the answer is unique. And we'd like the template to be cheap to evaluate, smooth, and well-behaved.</p>
+
+<h3>Why a polynomial?</h3>
+
+<p>A degree-n polynomial has the form</p>
+
+<p style="text-align:center"><code>a₀ + a₁·s + a₂·s² + … + a<sub>n</sub>·s<sup>n</sup></code></p>
+
+<p>which gives us exactly <strong>n + 1</strong> tunable knobs. Since we have four conditions, n = 3 — a cubic — gives us exactly four. Polynomials also tick every other box: cheap to evaluate (just multiplies and adds), smooth everywhere, and the four conditions turn into <em>linear</em> equations in the unknowns, so the solve is mechanical and always has a unique answer.</p>
+
+<p>So the template we pick is the general cubic:</p>
+
+<p style="text-align:center"><code>f(s) = a + b·s + c·s² + d·s³</code></p>
+
+<p>with four placeholders a, b, c, d. (The letters are just names for "the four numbers we will solve for.")</p>
+
+<h3>Could we use a different family?</h3>
+
+<p>Yes — and people sometimes do. Any family with four free parameters could in principle satisfy four conditions. For instance:</p>
+
+<ul>
+  <li><code>a + b·s + c·sin(πs) + d·cos(πs)</code> — a trig blend.</li>
+  <li><code>a + b·s + c·e<sup>s</sup> + d·e<sup>−s</sup></code> — exponentials.</li>
+  <li>Rational functions, B-splines, custom easing curves, etc.</li>
+</ul>
+
+<p>Each one would give a different curve shape and a different "personality" to the interpolation. But polynomials win in practice because:</p>
+
+<ul>
+  <li>The resulting equations are <em>linear</em> in the coefficients, so solving is trivial.</li>
+  <li>A cubic is the lowest-degree polynomial with enough knobs — anything higher (quartic, quintic) has spare freedom we'd have to invent extra rules to pin down.</li>
+  <li>Hardware can evaluate them in a handful of FMA instructions.</li>
+  <li>They reproduce simple behaviors exactly: a cubic Hermite with the right tangents reproduces a straight line; a quintic Hermite can also reproduce a parabola; etc.</li>
+</ul>
+
+<p>Bézier curves and Catmull-Rom splines, by the way, are also cubic polynomials — they just expose <em>different</em> four parameters (control points instead of values + tangents). Any cubic can be written in any of these bases; they're all the same family viewed through different windows.</p>
+
+<h3>Solving the system</h3>
+
+<p>Imposing the four conditions on <code>f(s) = a + b·s + c·s² + d·s³</code>:</p>
+
+<table class="basis">
+  <tr><th>condition</th><th>at</th><th>requires</th></tr>
+  <tr><td>f(0) = p₀</td><td>s = 0</td><td>a = p₀</td></tr>
+  <tr><td>f(1) = p₁</td><td>s = 1</td><td>a + b + c + d = p₁</td></tr>
+  <tr><td>f'(0) = m₀</td><td>s = 0</td><td>b = m₀</td></tr>
+  <tr><td>f'(1) = m₁</td><td>s = 1</td><td>b + 2c + 3d = m₁</td></tr>
+</table>
+
+<p>Two equations give a and b directly. Subtracting and combining the other two, we get</p>
+
+<p style="text-align:center">
+c = 3(p₁ − p₀) − 2m₀ − m₁<br/>
+d = 2(p₀ − p₁) + m₀ + m₁
+</p>
+
+<p>Substituting back into <code>f(s) = a + bs + cs² + ds³</code> and grouping by which input each term multiplies:</p>
+
+<p style="text-align:center" class="mono">
+f(s) = (2s³ − 3s² + 1)·p₀ + (s³ − 2s² + s)·m₀ + (−2s³ + 3s² )·p₁ + (s³ − s² )·m₁
+</p>
+
+<p><span class="key">Those four polynomials are the Hermite basis functions.</span> They are exactly the four coefficients you see in the code:</p>
+
+<pre>(2 * s3 - 3 * s2 + 1) * k0.v   // h₀₀(s) · p₀
+(s3 - 2 * s2 + s)      * m0    // h₁₀(s) · m₀  (then scaled by dt — see §6)
+(-2 * s3 + 3 * s2)     * k1.v  // h₀₁(s) · p₁
+(s3 - s2)              * m1    // h₁₁(s) · m₁  (also scaled by dt)</pre>
+
+<h2>4. Reading the basis functions</h2>
+
+<p>Each basis function is a cubic that "owns" one of the four inputs. To see what role it plays, evaluate each one at s = 0 and s = 1, and similarly each one's derivative:</p>
+
+<table class="basis">
+  <tr>
+    <th>basis</th>
+    <th>formula</th>
+    <th>at s=0</th>
+    <th>at s=1</th>
+    <th>slope at s=0</th>
+    <th>slope at s=1</th>
+  </tr>
+  <tr><td>h₀₀</td><td>2s³ − 3s² + 1</td><td>1</td><td>0</td><td>0</td><td>0</td></tr>
+  <tr><td>h₁₀</td><td>s³ − 2s² + s</td>  <td>0</td><td>0</td><td>1</td><td>0</td></tr>
+  <tr><td>h₀₁</td><td>−2s³ + 3s²</td>    <td>0</td><td>1</td><td>0</td><td>0</td></tr>
+  <tr><td>h₁₁</td><td>s³ − s²</td>       <td>0</td><td>0</td><td>0</td><td>1</td></tr>
+</table>
+
+<p>This table is the whole point. Each basis is "1" for exactly one of (left value, left slope, right value, right slope) and "0" for the other three. So when we add them up weighted by p₀, m₀, p₁, m₁, every condition is satisfied automatically, by construction.</p>
+
+<figure>
+<svg viewBox="0 0 480 320" xmlns="http://www.w3.org/2000/svg">
+  <!-- 2x2 grid of mini plots -->
+  <g font-family="sans-serif" font-size="11">
+    <!-- h00 -->
+    <g transform="translate(20,20)">
+      <rect x="0" y="0" width="200" height="120" fill="#fafaf4" stroke="#ccc"/>
+      <text x="100" y="-3" text-anchor="middle" fill="#333">h₀₀(s) = 2s³ − 3s² + 1</text>
+      <line x1="0" y1="100" x2="200" y2="100" stroke="#bbb"/>
+      <line x1="0" y1="20"  x2="200" y2="20"  stroke="#eee"/>
+      <!-- y from 0 (at y=100) to 1 (at y=20). h00(0)=1, h00(0.5)=0.5, h00(1)=0 -->
+      <path d="M 0 20 Q 100 20 100 60 T 200 100" fill="none" stroke="#c0392b" stroke-width="2"/>
+      <text x="3" y="18" fill="#888">1</text>
+      <text x="3" y="113" fill="#888">0</text>
+      <text x="100" y="135" text-anchor="middle">controls p₀</text>
+    </g>
+    <!-- h01 -->
+    <g transform="translate(260,20)">
+      <rect x="0" y="0" width="200" height="120" fill="#fafaf4" stroke="#ccc"/>
+      <text x="100" y="-3" text-anchor="middle" fill="#333">h₀₁(s) = −2s³ + 3s²</text>
+      <line x1="0" y1="100" x2="200" y2="100" stroke="#bbb"/>
+      <line x1="0" y1="20"  x2="200" y2="20"  stroke="#eee"/>
+      <!-- mirror of h00 -->
+      <path d="M 0 100 Q 100 100 100 60 T 200 20" fill="none" stroke="#c0392b" stroke-width="2"/>
+      <text x="3" y="18" fill="#888">1</text>
+      <text x="3" y="113" fill="#888">0</text>
+      <text x="100" y="135" text-anchor="middle">controls p₁</text>
+    </g>
+    <!-- h10 -->
+    <g transform="translate(20,180)">
+      <rect x="0" y="0" width="200" height="120" fill="#fafaf4" stroke="#ccc"/>
+      <text x="100" y="-3" text-anchor="middle" fill="#333">h₁₀(s) = s³ − 2s² + s</text>
+      <line x1="0" y1="100" x2="200" y2="100" stroke="#bbb"/>
+      <!-- peaks ~+0.148 at s=1/3 -->
+      <path d="M 0 100 C 30 80, 60 75, 75 80 S 150 100, 200 100" fill="none" stroke="#c0392b" stroke-width="2"/>
+      <text x="3" y="113" fill="#888">0</text>
+      <text x="100" y="135" text-anchor="middle">controls m₀ (slope at left)</text>
+    </g>
+    <!-- h11 -->
+    <g transform="translate(260,180)">
+      <rect x="0" y="0" width="200" height="120" fill="#fafaf4" stroke="#ccc"/>
+      <text x="100" y="-3" text-anchor="middle" fill="#333">h₁₁(s) = s³ − s²</text>
+      <line x1="0" y1="100" x2="200" y2="100" stroke="#bbb"/>
+      <!-- dips ~-0.148 at s=2/3 -->
+      <path d="M 0 100 C 50 100, 110 110, 130 115 S 180 110, 200 100" fill="none" stroke="#c0392b" stroke-width="2"/>
+      <text x="3" y="113" fill="#888">0</text>
+      <text x="100" y="135" text-anchor="middle">controls m₁ (slope at right)</text>
+    </g>
+  </g>
+</svg>
+<figcaption>The four Hermite basis functions on s ∈ [0, 1]. Top row: the value bases — they look like smoothstep-style transitions. Bottom row: the tangent bases — small bumps that contribute a slope without disturbing endpoint values.</figcaption>
+</figure>
+
+<h2>5. Matrix form</h2>
+
+<p>Polynomial bases compose nicely as matrices. If we stack the powers of s and the inputs into vectors, the formula factors as</p>
+
+<p style="text-align:center">
+f(s) =
+<span class="matrix"><table>
+  <tr><td>1</td><td>s</td><td>s²</td><td>s³</td></tr>
+</table></span>
+<span class="matrix"><table>
+  <tr><td>1</td><td>0</td><td>0</td><td>0</td></tr>
+  <tr><td>0</td><td>1</td><td>0</td><td>0</td></tr>
+  <tr><td>−3</td><td>−2</td><td>3</td><td>−1</td></tr>
+  <tr><td>2</td><td>1</td><td>−2</td><td>1</td></tr>
+</table></span>
+<span class="matrix"><table>
+  <tr><td>p₀</td></tr>
+  <tr><td>m₀</td></tr>
+  <tr><td>p₁</td></tr>
+  <tr><td>m₁</td></tr>
+</table></span>
+</p>
+
+<p>The middle 4×4 is sometimes called the <em>Hermite basis matrix</em>. Multiply it out and you recover the same four basis polynomials. This is the form most graphics textbooks present; the explicit polynomial form in the code is just the result of doing the multiplication once by hand and inlining it.</p>
+
+<h2>6. Why tangents get scaled by <code>dt</code></h2>
+
+<p>The Hermite basis we just derived assumes s ∈ [0, 1]. But our keyframes are spaced in real time t, with possibly unequal gaps. Going from "slope with respect to s" to "slope with respect to t" requires the chain rule:</p>
+
+<p style="text-align:center"><code>df/ds = (df/dt) · (dt/ds) = (df/dt) · dt</code></p>
+
+<p>where <code>dt = t₁ − t₀</code> is the segment length. So if we want the curve's <em>real</em> slope at the left keyframe to be m₀ (in v-per-second), we have to feed the unit-interval formula a slope of <code>m₀ · dt</code>. That's why the code reads</p>
+
+<pre>(s3 - 2 * s2 + s) * m0 * dt
+(s3 - s2)         * m1 * dt</pre>
+
+<p>The <code>* dt</code> is a units-conversion factor, nothing more. Without it, longer segments would look "lazier" than short ones — the geometry would silently depend on how you spaced your keyframes.</p>
+
+<h2>7. Choosing the tangents: Catmull-Rom</h2>
+
+<p>The Hermite formulation lets us pick any slopes we like at each keyframe. But the user only supplies <em>values</em> in the keyframe table — no slopes. We have to invent reasonable slopes automatically. The classic choice, used in this code, is the <span class="key">Catmull-Rom rule</span>: at each interior keyframe, set the tangent to the average slope of the two adjacent segments.</p>
+
+<p style="text-align:center"><code>m<sub>i</sub> = ½ · ( (v<sub>i</sub> − v<sub>i−1</sub>) / (t<sub>i</sub> − t<sub>i−1</sub>) + (v<sub>i+1</sub> − v<sub>i</sub>) / (t<sub>i+1</sub> − t<sub>i</sub>) )</code></p>
+
+<figure>
+<svg viewBox="0 0 460 200" xmlns="http://www.w3.org/2000/svg">
+  <line x1="40" y1="160" x2="430" y2="160" stroke="#888"/>
+  <line x1="40" y1="20"  x2="40"  y2="160" stroke="#888"/>
+  <!-- three keys -->
+  <g fill="#333">
+    <circle cx="100" cy="130" r="5"/>
+    <circle cx="240" cy="60"  r="5"/>
+    <circle cx="380" cy="100" r="5"/>
+  </g>
+  <text x="90"  y="148" font-size="12" font-family="serif">v<tspan font-size="9" baseline-shift="-25%">i−1</tspan></text>
+  <text x="232" y="50"  font-size="12" font-family="serif">v<tspan font-size="9" baseline-shift="-25%">i</tspan></text>
+  <text x="370" y="118" font-size="12" font-family="serif">v<tspan font-size="9" baseline-shift="-25%">i+1</tspan></text>
+  <!-- left chord -->
+  <line x1="100" y1="130" x2="240" y2="60" stroke="#bbb" stroke-dasharray="3 3"/>
+  <!-- right chord -->
+  <line x1="240" y1="60" x2="380" y2="100" stroke="#bbb" stroke-dasharray="3 3"/>
+  <!-- averaged slope arrow at v_i -->
+  <line x1="180" y1="70" x2="320" y2="70" stroke="#c0392b" stroke-width="2" marker-end="url(#arrow2)"/>
+  <text x="250" y="35" font-size="11" font-family="serif" fill="#c0392b">m<tspan font-size="9" baseline-shift="-25%">i</tspan> = average of the two chord slopes</text>
+  <defs>
+    <marker id="arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#c0392b"/>
+    </marker>
+  </defs>
+</svg>
+<figcaption>The Catmull-Rom tangent at v<sub>i</sub> is the mean of the two neighboring chord slopes. This makes the curve look like it "remembers" both directions of motion through the keyframe.</figcaption>
+</figure>
+
+<p>Why average? It's the cheapest rule that's symmetric (treats left and right neighbours equally) and reproduces a straight line exactly: if three keyframes are colinear, the averaged slope is the line's slope, so the resulting Hermite segment is the line itself.</p>
+
+<h2>8. Endpoint and flat-span handling</h2>
+
+<p>Two cases need special treatment:</p>
+
+<p><strong>Endpoints.</strong> The first and last keyframes have no neighbour on one side, so there's no second chord to average with. The code returns 0 for the tangent at endpoints. Geometrically, the curve enters the first keyframe and leaves the last keyframe horizontally — it "eases in" and "eases out" of the whole animation.</p>
+
+<p><strong>Flat spans.</strong> If two consecutive keyframes have the same value (the user is intentionally holding a value steady), naïve averaging at the boundary keyframe between a flat segment and a sloped one would still produce a non-zero tangent — and a cubic with non-zero tangent against a flat target will <em>overshoot</em> before settling. The code defends against this:</p>
+
+<pre>if (slopeLeft === 0 || slopeRight === 0) return 0;</pre>
+
+<p>If either neighbouring segment is flat, the tangent is forced to zero, so a "hold" really holds, and the curve enters/leaves the hold smoothly without bouncing.</p>
+
+<figure>
+<svg viewBox="0 0 460 220" xmlns="http://www.w3.org/2000/svg">
+  <line x1="40" y1="180" x2="430" y2="180" stroke="#888"/>
+  <line x1="40" y1="20"  x2="40"  y2="180" stroke="#888"/>
+  <!-- two flat keys then a sloped third -->
+  <g fill="#333">
+    <circle cx="80"  cy="140" r="4"/>
+    <circle cx="200" cy="140" r="4"/>
+    <circle cx="380" cy="50"  r="4"/>
+  </g>
+  <!-- bad curve: overshoots above the flat -->
+  <path d="M 80 140 C 140 140, 170 110, 200 140 S 320 80, 380 50" fill="none" stroke="#999" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="120" y="105" font-size="11" font-family="serif" fill="#999">naïve average → overshoot</text>
+  <!-- good curve: clamps to flat -->
+  <path d="M 80 140 L 200 140 C 280 140, 320 80, 380 50" fill="none" stroke="#c0392b" stroke-width="2"/>
+  <text x="220" y="170" font-size="11" font-family="serif" fill="#c0392b">tangent forced to 0 → clean exit</text>
+</svg>
+<figcaption>Two consecutive identical values define a flat hold (left). Without the flat-span guard, a cubic with averaged tangents would dip above the hold before climbing to the next key. Forcing m = 0 at the boundary keyframe pins the curve to the hold value until the segment actually starts changing.</figcaption>
+</figure>
+
+<h2>9. Putting it together — what <code>evalCurve</code> actually does</h2>
+
+<ol>
+  <li>If t is outside the keyframe range, clamp to the nearest endpoint value (no extrapolation).</li>
+  <li>Find the segment [k<sub>i</sub>, k<sub>i+1</sub>] containing t.</li>
+  <li>Compute the unit-interval parameter s = (t − t<sub>i</sub>) / dt and its powers s², s³.</li>
+  <li>Look up tangents m₀ and m₁ from the Catmull-Rom rule (with endpoint and flat-span overrides).</li>
+  <li>Combine value bases (h₀₀, h₀₁) with raw values, and tangent bases (h₁₀, h₁₁) with tangents scaled by dt:
+<pre>return (2*s³ − 3*s² + 1) · v₀
+     + (s³  − 2*s² + s) · m₀ · dt
+     + (−2*s³ + 3*s²)   · v₁
+     + (s³  − s²)       · m₁ · dt;</pre>
+  </li>
+</ol>
+
+<p>That's the whole algorithm. Every line in <code>evalCurve</code> traces back to one of three things: the four conditions of Section 2 (which fix the basis functions), the chain rule of Section 6 (which puts the <code>dt</code> on the tangents), or the Catmull-Rom and flat-span rules of Sections 7 and 8 (which choose the tangents on the user's behalf).</p>
+
+</body>
+</html>

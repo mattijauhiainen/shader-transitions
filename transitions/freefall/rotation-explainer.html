@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Euler-Angle Rotation Matrices — A Textbook Walkthrough</title>
+<style>
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    max-width: 760px;
+    margin: 2rem auto;
+    padding: 0 1.25rem;
+    line-height: 1.6;
+    color: #222;
+    background: #fdfdfa;
+  }
+  h1, h2, h3 { font-family: "Helvetica Neue", Arial, sans-serif; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: .3rem; }
+  h2 { margin-top: 2.4rem; border-bottom: 1px solid #ccc; padding-bottom: .2rem; }
+  code, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.95em; }
+  pre {
+    background: #f3f1ea;
+    padding: .8rem 1rem;
+    overflow-x: auto;
+    border-left: 3px solid #888;
+  }
+  .matrix {
+    display: inline-block;
+    vertical-align: middle;
+    margin: 0 .3em;
+  }
+  .matrix table { border-collapse: collapse; }
+  .matrix td {
+    padding: 2px 10px;
+    text-align: center;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+  }
+  .matrix {
+    border-left: 2px solid #333;
+    border-right: 2px solid #333;
+    padding: 2px 4px;
+  }
+  figure {
+    margin: 1.5rem auto;
+    text-align: center;
+  }
+  figcaption {
+    font-size: 0.9em;
+    color: #555;
+    margin-top: .4rem;
+    font-style: italic;
+  }
+  svg { max-width: 100%; height: auto; }
+  .key { background: #fff7d6; padding: .1em .35em; border-radius: 3px; }
+  table.layout { border-collapse: collapse; margin: 1rem 0; }
+  table.layout td, table.layout th {
+    border: 1px solid #aaa;
+    padding: .35rem .7rem;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    text-align: center;
+  }
+  table.layout th { background: #ece8db; }
+</style>
+</head>
+<body>
+
+<h1>Euler-Angle Rotation Matrices</h1>
+<p><em>A textbook walkthrough of the math behind a yaw-pitch-roll camera, ending in the exact 9 entries used in the freefall transition.</em></p>
+
+<h2>1. What a rotation matrix actually is</h2>
+
+<p>A rotation matrix is a 3×3 grid of numbers that, when multiplied with a 3D vector, returns that same vector after being rigidly rotated around the origin. Lengths and angles are preserved &mdash; nothing stretches, nothing skews.</p>
+
+<p>The three columns of any rotation matrix have a beautiful geometric meaning: <span class="key">column <em>i</em> is where the original axis <em>i</em> ends up after the rotation</span>. Column 0 = where the X axis goes, column 1 = where Y goes, column 2 = where Z goes. That's why the columns are always unit length and mutually perpendicular: the rotated axes still form an orthonormal frame.</p>
+
+<figure>
+<svg viewBox="0 0 420 220" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#333"/>
+    </marker>
+    <marker id="arrowR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#c0392b"/>
+    </marker>
+  </defs>
+  <!-- original frame -->
+  <g stroke="#333" stroke-width="1.5" fill="none" marker-end="url(#arrow)">
+    <line x1="100" y1="160" x2="200" y2="160"/>
+    <line x1="100" y1="160" x2="100" y2="60"/>
+  </g>
+  <text x="205" y="164" font-family="serif" font-style="italic">x</text>
+  <text x="92"  y="55"  font-family="serif" font-style="italic">y</text>
+  <text x="80"  y="175" font-family="serif" font-size="11">original</text>
+
+  <!-- rotated frame -->
+  <g stroke="#c0392b" stroke-width="1.5" fill="none" marker-end="url(#arrowR)">
+    <line x1="320" y1="160" x2="390" y2="89"/>  <!-- ~45 deg -->
+    <line x1="320" y1="160" x2="249" y2="89"/>
+  </g>
+  <text x="395" y="86" font-family="serif" font-style="italic" fill="#c0392b">x'</text>
+  <text x="237" y="86" font-family="serif" font-style="italic" fill="#c0392b">y'</text>
+  <text x="290" y="175" font-family="serif" font-size="11" fill="#c0392b">rotated 45°</text>
+</svg>
+<figcaption>A rotation sends each basis axis to a new direction. The matrix's columns record exactly where they land.</figcaption>
+</figure>
+
+<h2>2. Deriving the 2D rotation matrix</h2>
+
+<p>Before tackling 3D, let's earn the 2D version from scratch. Take a point <strong>p</strong> = (x, y) and rotate it counterclockwise by angle θ around the origin. We want the new coordinates (x', y'), and we want them as a matrix.</p>
+
+<p>The trick is to look at where the basis vectors land. By the very definition of cosine and sine:</p>
+
+<ul>
+  <li>The X-axis unit vector (1, 0), rotated by θ, lands at <strong>(cos θ, sin θ)</strong> — that's literally the point on the unit circle at angle θ.</li>
+  <li>The Y-axis unit vector (0, 1) is just X rotated 90° further along, so it lands at angle θ + 90°, which is <strong>(−sin θ, cos θ)</strong>.</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 420 260" xmlns="http://www.w3.org/2000/svg">
+  <!-- unit circle -->
+  <circle cx="210" cy="130" r="90" fill="none" stroke="#bbb" stroke-dasharray="3 3"/>
+  <!-- axes -->
+  <line x1="100" y1="130" x2="320" y2="130" stroke="#888"/>
+  <line x1="210" y1="20"  x2="210" y2="240" stroke="#888"/>
+  <text x="325" y="134" font-family="serif" font-style="italic" font-size="12">x</text>
+  <text x="214" y="20"  font-family="serif" font-style="italic" font-size="12">y</text>
+
+  <!-- original X̂ -->
+  <line x1="210" y1="130" x2="300" y2="130" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="270" y="148" font-size="11" font-family="serif">X̂ = (1, 0)</text>
+
+  <!-- rotated X̂ at 40 deg: cos40≈0.766, sin40≈0.643 → x = 210+90*.766=279, y = 130-90*.643=72 -->
+  <line x1="210" y1="130" x2="279" y2="72" stroke="#c0392b" stroke-width="2" marker-end="url(#arrowR)"/>
+  <text x="282" y="68" font-size="11" font-family="serif" fill="#c0392b">(cos θ, sin θ)</text>
+
+  <!-- original Ŷ -->
+  <line x1="210" y1="130" x2="210" y2="40" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="160" y="38" font-size="11" font-family="serif">Ŷ = (0, 1)</text>
+
+  <!-- rotated Ŷ at 130 deg: cos130≈-0.643, sin130≈0.766 → x = 210-90*.643=152, y=130-90*.766=61 -->
+  <line x1="210" y1="130" x2="152" y2="61" stroke="#c0392b" stroke-width="2" marker-end="url(#arrowR)"/>
+  <text x="40" y="55" font-size="11" font-family="serif" fill="#c0392b">(−sin θ, cos θ)</text>
+
+  <!-- angle arc -->
+  <path d="M 250 130 A 40 40 0 0 0 235.6 104.3" fill="none" stroke="#c0392b" stroke-width="1"/>
+  <text x="245" y="118" font-size="11" font-family="serif" fill="#c0392b" font-style="italic">θ</text>
+</svg>
+<figcaption>The rotated basis vectors land at predictable points on the unit circle. The new X̂ is (cos θ, sin θ); the new Ŷ is 90° further around, at (−sin θ, cos θ).</figcaption>
+</figure>
+
+<p>Any point (x, y) is just <code>x · X̂ + y · Ŷ</code>. After the rotation it becomes <code>x · (rotated X̂) + y · (rotated Ŷ)</code>:</p>
+
+<p style="text-align:center">
+x' = x · cos θ + y · (−sin θ)<br/>
+y' = x · sin θ + y · cos θ
+</p>
+
+<p>Bundling that as a matrix-vector product:</p>
+
+<p style="text-align:center">
+<span class="matrix"><table>
+  <tr><td>x'</td></tr>
+  <tr><td>y'</td></tr>
+</table></span>
+=
+<span class="matrix"><table>
+  <tr><td>cos θ</td><td>−sin θ</td></tr>
+  <tr><td>sin θ</td><td>cos θ</td></tr>
+</table></span>
+<span class="matrix"><table>
+  <tr><td>x</td></tr>
+  <tr><td>y</td></tr>
+</table></span>
+</p>
+
+<p>That <code>[[cos, −sin], [sin, cos]]</code> block is the <span class="key">only</span> place those four entries come from. Everything else in this document is consequences. Notice the columns of the matrix are exactly the rotated basis vectors — the same principle from Section 1.</p>
+
+<p><strong>Quick sanity check.</strong> Plug in θ = 90°: cos = 0, sin = 1. The matrix becomes <code>[[0, −1], [1, 0]]</code>. Apply it to (1, 0): get (0, 1). ✓ X axis became Y axis. Apply to (0, 1): get (−1, 0). ✓ Y axis became −X. That's a counterclockwise quarter turn.</p>
+
+<p>If you flip the convention — clockwise positive, or use a left-handed coordinate system — the off-diagonal signs swap. <em>That single choice is the entire source of sign confusion in graphics code.</em></p>
+
+<h2>3. Lifting to 3D: rotate around an axis</h2>
+
+<p>A 3D rotation around an axis just runs the 2D rotation in the plane perpendicular to that axis, while leaving the axis itself untouched. Concretely, for rotation around Z, the (x, y) plane spins by θ and z stays put. Stack a "do nothing to z" row and column onto the 2D matrix:</p>
+
+<p style="text-align:center">
+R<sub>z</sub>(γ) =
+<span class="matrix"><table>
+  <tr><td>cos γ</td><td>−sin γ</td><td>0</td></tr>
+  <tr><td>sin γ</td><td>cos γ</td><td>0</td></tr>
+  <tr><td>0</td><td>0</td><td>1</td></tr>
+</table></span>
+</p>
+
+<p>The third column is (0, 0, 1) because Z stays put. The third row is (0, 0, 1) because the new z is just the old z. Otherwise, it's the 2D matrix sitting in the top-left 2×2 block.</p>
+
+<p>For R<sub>x</sub>(α), the X axis is fixed and the rotation happens in the (y, z) plane. Same 2D block, embedded in the bottom-right 2×2 instead:</p>
+
+<p style="text-align:center">
+R<sub>x</sub>(α) =
+<span class="matrix"><table>
+  <tr><td>1</td><td>0</td><td>0</td></tr>
+  <tr><td>0</td><td>cos α</td><td>−sin α</td></tr>
+  <tr><td>0</td><td>sin α</td><td>cos α</td></tr>
+</table></span>
+</p>
+
+<h3>Why R<sub>y</sub> has flipped signs</h3>
+
+<p>R<sub>y</sub>(β) is the one that looks subtly wrong on first read: the minus sign sits on <code>−sin β</code> in the <em>bottom-left</em>, not the top-right.</p>
+
+<p style="text-align:center">
+R<sub>y</sub>(β) =
+<span class="matrix"><table>
+  <tr><td>cos β</td><td>0</td><td>sin β</td></tr>
+  <tr><td>0</td><td>1</td><td>0</td></tr>
+  <tr><td>−sin β</td><td>0</td><td>cos β</td></tr>
+</table></span>
+</p>
+
+<p>The reason is a bookkeeping issue, not a geometric one. We always want positive θ to mean "counterclockwise when looking from positive axis back toward origin," and we want the 2D rotation block to keep the same sign pattern. That works if we list each rotation's plane in the <em>cyclic</em> order (x, y, z) → (y, z) → (z, x):</p>
+
+<figure>
+<svg viewBox="0 0 460 130" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="sans-serif" font-size="13">
+    <text x="20" y="30">R<tspan font-size="9" baseline-shift="-25%">z</tspan>:</text>
+    <text x="60" y="30">rotates plane (x, y), fixes z</text>
+    <text x="20" y="65">R<tspan font-size="9" baseline-shift="-25%">x</tspan>:</text>
+    <text x="60" y="65">rotates plane (y, z), fixes x</text>
+    <text x="20" y="100">R<tspan font-size="9" baseline-shift="-25%">y</tspan>:</text>
+    <text x="60" y="100">rotates plane <tspan fill="#c0392b">(z, x)</tspan>, fixes y</text>
+    <text x="270" y="100" fill="#c0392b" font-style="italic">← note: z first, then x</text>
+  </g>
+</svg>
+<figcaption>Listing axes cyclically keeps every rotation's "first axis" and "second axis" in the same sense. R<sub>y</sub>'s natural plane is (z, x), not (x, z).</figcaption>
+</figure>
+
+<p>If we wrote R<sub>y</sub> in (z, x) order, the 2D block would look identical to the others:</p>
+
+<p style="text-align:center">
+<span class="matrix"><table>
+  <tr><td>cos β</td><td>−sin β</td></tr>
+  <tr><td>sin β</td><td>cos β</td></tr>
+</table></span>
+&nbsp;←&nbsp;rows/cols ordered (z, x)
+</p>
+
+<p>But our matrix has to be written in (x, y, z) order so it composes with the others. When we reshuffle rows and columns from (z, x) back to (x, z), the off-diagonal entries swap places — and that's exactly why the negative sign migrates from the top-right to the bottom-left.</p>
+
+<p>So the "weird" sign pattern in R<sub>y</sub> is the cost of writing all three matrices in (x, y, z) order while their underlying 2D rotations live in different planes.</p>
+
+<h2>4. The three elementary rotations, summarized</h2>
+
+<p>Pulling the three derivations together:</p>
+
+<p><strong>Around X (pitch — tip forward/back):</strong></p>
+<p style="text-align:center">
+R<sub>x</sub>(α) =
+<span class="matrix"><table>
+  <tr><td>1</td><td>0</td><td>0</td></tr>
+  <tr><td>0</td><td>cos α</td><td>−sin α</td></tr>
+  <tr><td>0</td><td>sin α</td><td>cos α</td></tr>
+</table></span>
+</p>
+
+<p><strong>Around Y (yaw — turn left/right):</strong></p>
+<p style="text-align:center">
+R<sub>y</sub>(β) =
+<span class="matrix"><table>
+  <tr><td>cos β</td><td>0</td><td>sin β</td></tr>
+  <tr><td>0</td><td>1</td><td>0</td></tr>
+  <tr><td>−sin β</td><td>0</td><td>cos β</td></tr>
+</table></span>
+</p>
+
+<p><strong>Around Z (roll — tilt sideways):</strong></p>
+<p style="text-align:center">
+R<sub>z</sub>(γ) =
+<span class="matrix"><table>
+  <tr><td>cos γ</td><td>−sin γ</td><td>0</td></tr>
+  <tr><td>sin γ</td><td>cos γ</td><td>0</td></tr>
+  <tr><td>0</td><td>0</td><td>1</td></tr>
+</table></span>
+</p>
+
+<p>Each one fixes its own axis (the row/column of 1s and 0s) and does a 2D rotation in the plane perpendicular to it.</p>
+
+<figure>
+<svg viewBox="0 0 600 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- pitch -->
+  <g transform="translate(50,30)">
+    <text x="50" y="0" font-family="sans-serif" font-size="13" text-anchor="middle">pitch (X axis)</text>
+    <line x1="20" y1="80" x2="120" y2="80" stroke="#888" stroke-width="2"/>
+    <ellipse cx="70" cy="80" rx="30" ry="14" fill="none" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="3 3"/>
+    <path d="M 100 80 a 30 14 0 0 1 -8 10" fill="none" stroke="#c0392b" stroke-width="1.5" marker-end="url(#arrowR)"/>
+  </g>
+  <!-- yaw -->
+  <g transform="translate(220,30)">
+    <text x="60" y="0" font-family="sans-serif" font-size="13" text-anchor="middle">yaw (Y axis)</text>
+    <line x1="60" y1="20" x2="60" y2="140" stroke="#888" stroke-width="2"/>
+    <ellipse cx="60" cy="80" rx="40" ry="14" fill="none" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="3 3"/>
+    <path d="M 100 80 a 40 14 0 0 1 -8 10" fill="none" stroke="#c0392b" stroke-width="1.5" marker-end="url(#arrowR)"/>
+  </g>
+  <!-- roll -->
+  <g transform="translate(400,30)">
+    <text x="60" y="0" font-family="sans-serif" font-size="13" text-anchor="middle">roll (Z axis)</text>
+    <circle cx="60" cy="80" r="3" fill="#888"/>
+    <circle cx="60" cy="80" r="35" fill="none" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="3 3"/>
+    <path d="M 95 80 a 35 35 0 0 1 -10 25" fill="none" stroke="#c0392b" stroke-width="1.5" marker-end="url(#arrowR)"/>
+  </g>
+</svg>
+<figcaption>Each elementary rotation pivots around one axis. The dashed circle is the plane of rotation; the fixed axis pokes out perpendicular to it.</figcaption>
+</figure>
+
+<h2>5. Composition: order matters</h2>
+
+<p>To reach a general orientation we apply several elementary rotations in sequence. In matrix notation, applying R<sub>1</sub> first and R<sub>2</sub> second to a vector <strong>v</strong> is written</p>
+
+<p style="text-align:center"><strong>v'</strong> = R<sub>2</sub> · R<sub>1</sub> · <strong>v</strong></p>
+
+<p>The matrix on the <em>right</em> hits the vector first. So in</p>
+
+<p style="text-align:center">R = R<sub>z</sub>(γ) · R<sub>x</sub>(α) · R<sub>y</sub>(β)</p>
+
+<p>yaw is applied first, then pitch, then roll. <span class="key">Matrix multiplication is not commutative</span>: pitching then yawing produces a different orientation than yawing then pitching. Try it with your hand: nose-down then turn-left is not the same as turn-left then nose-down.</p>
+
+<figure>
+<svg viewBox="0 0 540 180" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="sans-serif" font-size="12">
+    <!-- top: pitch then yaw -->
+    <text x="20" y="30">start</text>
+    <rect x="60" y="15" width="40" height="30" fill="#fff" stroke="#333"/>
+    <text x="80" y="35" text-anchor="middle">→</text>
+    <text x="115" y="33">pitch ↓</text>
+    <rect x="170" y="15" width="40" height="30" fill="#fff" stroke="#333" transform="rotate(-25 190 30)"/>
+    <text x="220" y="33">yaw →</text>
+    <rect x="280" y="15" width="40" height="30" fill="#fff" stroke="#c0392b" transform="rotate(-25 300 30) translate(40 0)"/>
+    <text x="380" y="33" fill="#c0392b">result A</text>
+
+    <!-- bottom: yaw then pitch -->
+    <text x="20" y="120">start</text>
+    <rect x="60" y="105" width="40" height="30" fill="#fff" stroke="#333"/>
+    <text x="80" y="125" text-anchor="middle">→</text>
+    <text x="115" y="123">yaw →</text>
+    <rect x="170" y="105" width="40" height="30" fill="#fff" stroke="#333" transform="translate(40 0)"/>
+    <text x="270" y="123">pitch ↓</text>
+    <rect x="320" y="105" width="40" height="30" fill="#fff" stroke="#c0392b" transform="rotate(-25 340 120) translate(40 0)"/>
+    <text x="420" y="123" fill="#c0392b">result B ≠ A</text>
+  </g>
+</svg>
+<figcaption>Two rotations applied in opposite orders give different final orientations.</figcaption>
+</figure>
+
+<h2>6. Working out R<sub>z</sub>(γ)·R<sub>x</sub>(α)·R<sub>y</sub>(β) by hand</h2>
+
+<p>We can multiply the three matrices in two stages. First, <strong>M = R<sub>x</sub>(α) · R<sub>y</sub>(β)</strong>. Using shorthand cα = cos α, sα = sin α, etc.:</p>
+
+<p style="text-align:center">
+M =
+<span class="matrix"><table>
+  <tr><td>1</td><td>0</td><td>0</td></tr>
+  <tr><td>0</td><td>cα</td><td>−sα</td></tr>
+  <tr><td>0</td><td>sα</td><td>cα</td></tr>
+</table></span>
+·
+<span class="matrix"><table>
+  <tr><td>cβ</td><td>0</td><td>sβ</td></tr>
+  <tr><td>0</td><td>1</td><td>0</td></tr>
+  <tr><td>−sβ</td><td>0</td><td>cβ</td></tr>
+</table></span>
+=
+<span class="matrix"><table>
+  <tr><td>cβ</td><td>0</td><td>sβ</td></tr>
+  <tr><td>sα·sβ</td><td>cα</td><td>−sα·cβ</td></tr>
+  <tr><td>−cα·sβ</td><td>sα</td><td>cα·cβ</td></tr>
+</table></span>
+</p>
+
+<p>Now multiply on the left by R<sub>z</sub>(γ):</p>
+
+<p style="text-align:center">
+R = R<sub>z</sub>(γ) · M =
+<span class="matrix"><table>
+  <tr><td>cγ</td><td>−sγ</td><td>0</td></tr>
+  <tr><td>sγ</td><td>cγ</td><td>0</td></tr>
+  <tr><td>0</td><td>0</td><td>1</td></tr>
+</table></span>
+·
+<span class="matrix"><table>
+  <tr><td>cβ</td><td>0</td><td>sβ</td></tr>
+  <tr><td>sα·sβ</td><td>cα</td><td>−sα·cβ</td></tr>
+  <tr><td>−cα·sβ</td><td>sα</td><td>cα·cβ</td></tr>
+</table></span>
+</p>
+
+<p>The full product, computed entry by entry (each is row<sub>i</sub> · column<sub>j</sub>):</p>
+
+<p style="text-align:center">
+R =
+<span class="matrix"><table>
+  <tr><td>cγ·cβ − sγ·sα·sβ</td><td>−sγ·cα</td><td>cγ·sβ + sγ·sα·cβ</td></tr>
+  <tr><td>sγ·cβ + cγ·sα·sβ</td><td>cγ·cα</td><td>sγ·sβ − cγ·sα·cβ</td></tr>
+  <tr><td>−cα·sβ</td><td>sα</td><td>cα·cβ</td></tr>
+</table></span>
+</p>
+
+<p>These are exactly the 9 expressions assigned in the code &mdash; so the formulas are not magical, they are the bookkeeping result of multiplying three small matrices together.</p>
+
+<h2>7. Column-major storage</h2>
+
+<p>A 3×3 matrix has 9 entries; a flat <code>Float32Array</code> has 9 slots. There are two conventions for laying them out:</p>
+
+<table class="layout">
+  <tr><th>index</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th></tr>
+  <tr><th>row-major</th><td>R<sub>00</sub></td><td>R<sub>01</sub></td><td>R<sub>02</sub></td><td>R<sub>10</sub></td><td>R<sub>11</sub></td><td>R<sub>12</sub></td><td>R<sub>20</sub></td><td>R<sub>21</sub></td><td>R<sub>22</sub></td></tr>
+  <tr><th>column-major</th><td>R<sub>00</sub></td><td>R<sub>10</sub></td><td>R<sub>20</sub></td><td>R<sub>01</sub></td><td>R<sub>11</sub></td><td>R<sub>21</sub></td><td>R<sub>02</sub></td><td>R<sub>12</sub></td><td>R<sub>22</sub></td></tr>
+</table>
+
+<p>OpenGL and WebGL use column-major. So when the code sets <code>rot[5] = sa</code>, that's index 5 = row 2, column 1 in column-major terms = the (Z, Y) entry of R, which from our table above is <code>sα</code>. ✓</p>
+
+<h2>8. Reading the 9 lines of code</h2>
+
+<p>Lining up the assignments with the column-major layout:</p>
+
+<pre>rot[0] = cg*cb − sg*sa*sb;     // R₀₀  (X column, X row)
+rot[1] = sg*cb + cg*sa*sb;     // R₁₀
+rot[2] = −ca*sb;               // R₂₀
+rot[3] = −sg*ca;               // R₀₁  (Y column, X row)
+rot[4] = cg*ca;                // R₁₁
+rot[5] = sa;                   // R₂₁
+rot[6] = cg*sb + sg*sa*cb;     // R₀₂  (Z column, X row)
+rot[7] = sg*sb − cg*sa*cb;     // R₁₂
+rot[8] = ca*cb;                // R₂₂</pre>
+
+<p>Every line matches the corresponding entry of the symbolic R we worked out in Section 6. The middle column (<code>rot[3..5]</code>) is noticeably simpler because the middle column of R<sub>y</sub>(β) is (0, 1, 0)<sup>T</sup>, which kills the β terms during the multiplication.</p>
+
+<h2>9. Geometric reading</h2>
+
+<p>Recalling Section 1: the columns of R are the images of the world axes after the full yaw-pitch-roll rotation, expressed in the camera's frame.</p>
+
+<ul>
+  <li><strong>Column 0</strong> (rot[0..2]) — where world X ends up.</li>
+  <li><strong>Column 1</strong> (rot[3..5]) — where world Y ends up. Its third component is <code>sin α</code>: pitching the camera tilts the world's vertical axis by exactly that much, regardless of yaw or roll.</li>
+  <li><strong>Column 2</strong> (rot[6..8]) — where world Z ends up.</li>
+</ul>
+
+<p>So the cryptic-looking 9 lines are nothing more than: "given yaw, pitch, and roll, here is where each world axis points from the camera's perspective &mdash; written down column by column the way the GPU expects."</p>
+
+<h2>10. Using R in the vertex shader</h2>
+
+<p>So far R lives in JavaScript. To actually <em>see</em> a rotated world, every vertex of every particle has to be transformed by R on the GPU. The freefall shader does this in three conceptual stages: <strong>world → camera → screen</strong>. Here's the relevant slice of <code>freefall.vert.glsl</code>:</p>
+
+<pre>uniform vec3 uCamPos;
+uniform mat3 uCamRot;       // ← our R, uploaded via uniformMatrix3fv
+uniform float uFOCAL_LEN;
+uniform vec2  uVIEWPORT;
+
+void main() {
+    // ... build worldPos for this particle ...
+    vec3 worldPos  = vec3(worldXY, particleZ);
+
+    // Stage 1: world → camera
+    vec3 camSpace  = uCamRot * (worldPos - uCamPos);
+
+    // Stage 2: camera → screen (pinhole projection)
+    float perspScale = uFOCAL_LEN / camSpace.z;
+    vec2  projected  = camSpace.xy * perspScale + uVIEWPORT * 0.5;
+
+    // Stage 3: screen pixels → clip space
+    float ndcZ = (camSpace.z - uNEAR_CLIP) / (uFar - uNEAR_CLIP) * 2.0 - 1.0;
+    gl_Position  = vec4(projected / uVIEWPORT * 2.0 - 1.0, ndcZ, 1.0);
+}</pre>
+
+<h3>Stage 1: world → camera</h3>
+
+<p>This is the line that consumes our hard-won R:</p>
+
+<p style="text-align:center"><code>vec3 camSpace = uCamRot * (worldPos - uCamPos);</code></p>
+
+<p>Two things happen here, in order: a <em>translation</em> and then a <em>rotation</em>.</p>
+
+<ol>
+  <li><code>worldPos − uCamPos</code> shifts the origin to the camera. After this subtraction, a vector that points from the camera to the particle replaces the absolute world position. The camera is now sitting at (0, 0, 0).</li>
+  <li><code>uCamRot * (...)</code> applies our rotation R. Because R was built as the <em>world-to-camera</em> rotation, the result expresses that "camera-to-particle" vector in the camera's own coordinate frame: +X is camera-right, +Y is camera-up, +Z is the direction the camera is looking.</li>
+</ol>
+
+<figure>
+<svg viewBox="0 0 540 220" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrSm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#333"/>
+    </marker>
+    <marker id="arrR2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#c0392b"/>
+    </marker>
+    <marker id="arrB2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2980b9"/>
+    </marker>
+  </defs>
+
+  <!-- Panel 1: world frame, camera offset, particle elsewhere -->
+  <g>
+    <text x="80" y="20" font-family="sans-serif" font-size="12" text-anchor="middle">1. world space</text>
+    <line x1="20" y1="180" x2="160" y2="180" stroke="#888" marker-end="url(#arrSm)"/>
+    <line x1="20" y1="180" x2="20"  y2="50"  stroke="#888" marker-end="url(#arrSm)"/>
+    <text x="160" y="195" font-size="10" font-style="italic">x</text>
+    <text x="8"   y="50"  font-size="10" font-style="italic">y</text>
+    <!-- camera (tilted box) -->
+    <g transform="translate(60,140) rotate(-20)">
+      <rect x="-12" y="-8" width="24" height="16" fill="#fff" stroke="#2980b9"/>
+      <line x1="0" y1="0" x2="20" y2="0" stroke="#2980b9" stroke-width="2" marker-end="url(#arrB2)"/>
+    </g>
+    <text x="35" y="170" font-size="10" fill="#2980b9">cam</text>
+    <!-- particle -->
+    <circle cx="130" cy="80" r="4" fill="#c0392b"/>
+    <text x="138" y="78" font-size="10" fill="#c0392b">particle</text>
+  </g>
+
+  <!-- arrow between -->
+  <text x="200" y="115" font-size="20" text-anchor="middle">→</text>
+  <text x="200" y="135" font-size="9" text-anchor="middle">subtract uCamPos</text>
+
+  <!-- Panel 2: camera at origin, world rotated relative to it but still in world axes -->
+  <g transform="translate(220,0)">
+    <text x="80" y="20" font-family="sans-serif" font-size="12" text-anchor="middle">2. camera-centered (still world axes)</text>
+    <line x1="20" y1="180" x2="160" y2="180" stroke="#bbb" stroke-dasharray="3 3"/>
+    <line x1="20" y1="180" x2="20"  y2="50"  stroke="#bbb" stroke-dasharray="3 3"/>
+    <!-- camera at origin -->
+    <g transform="translate(20,180) rotate(-20)">
+      <rect x="-12" y="-8" width="24" height="16" fill="#fff" stroke="#2980b9"/>
+      <line x1="0" y1="0" x2="20" y2="0" stroke="#2980b9" stroke-width="2" marker-end="url(#arrB2)"/>
+    </g>
+    <!-- vector from cam to particle -->
+    <line x1="20" y1="180" x2="100" y2="80" stroke="#c0392b" stroke-width="1.5" marker-end="url(#arrR2)"/>
+    <circle cx="100" cy="80" r="4" fill="#c0392b"/>
+  </g>
+
+  <!-- arrow between -->
+  <text x="400" y="115" font-size="20" text-anchor="middle">→</text>
+  <text x="400" y="135" font-size="9" text-anchor="middle">multiply by R</text>
+
+  <!-- Panel 3: camera frame, axes aligned with cam, particle in camera-relative coords -->
+  <g transform="translate(420,0)">
+    <text x="60" y="20" font-family="sans-serif" font-size="12" text-anchor="middle">3. camera space</text>
+    <!-- camera-aligned axes -->
+    <line x1="10" y1="180" x2="120" y2="180" stroke="#2980b9" marker-end="url(#arrB2)"/>
+    <line x1="10" y1="180" x2="10"  y2="60"  stroke="#2980b9" marker-end="url(#arrB2)"/>
+    <text x="120" y="195" font-size="10" font-style="italic" fill="#2980b9">x (right)</text>
+    <text x="0"   y="55"  font-size="10" font-style="italic" fill="#2980b9">y (up)</text>
+    <!-- particle in cam frame -->
+    <line x1="10" y1="180" x2="80" y2="100" stroke="#c0392b" stroke-width="1.5" marker-end="url(#arrR2)"/>
+    <circle cx="80" cy="100" r="4" fill="#c0392b"/>
+    <text x="20" y="210" font-size="9" fill="#888">+z points away from viewer</text>
+  </g>
+</svg>
+<figcaption>Stage 1, three frames. (1) Particle and camera live in absolute world coordinates. (2) Subtracting the camera position re-bases everything around the camera but the axes are still world-aligned. (3) Multiplying by R re-expresses that vector in the camera's own axes — now <code>camSpace.x</code> is "how far right of the camera," <code>camSpace.y</code> is "how far above," and <code>camSpace.z</code> is "how far in front."</figcaption>
+</figure>
+
+<p>The translation has to come <em>before</em> the rotation. R is a pure rotation around the origin — it can't move the camera to the origin, only spin things around it. So we move first, spin second.</p>
+
+<p>A subtlety: the code uses the <em>same</em> R we built as world→camera, applied directly. If R were instead the camera-to-world rotation (the way you'd describe "the camera is yawed 30° to the left"), the shader would need its inverse. Since rotation matrices are orthogonal, the inverse is just the transpose — but it's much cleaner to build R in the right direction up front, which is exactly what Section 4's R<sub>z</sub>·R<sub>x</sub>·R<sub>y</sub> derivation does.</p>
+
+<h3>Stage 2: camera → screen (pinhole projection)</h3>
+
+<p>Once a point is in camera space, projecting it to a 2D image is a similar-triangles argument. Imagine a virtual image plane sitting at distance <code>f</code> (the focal length) in front of the camera, perpendicular to the camera's +Z axis. A particle at camera-space position (X, Y, Z) appears on that plane at:</p>
+
+<p style="text-align:center"><code>x_screen = f · X / Z &nbsp;&nbsp;&nbsp;&nbsp; y_screen = f · Y / Z</code></p>
+
+<figure>
+<svg viewBox="0 0 520 240" xmlns="http://www.w3.org/2000/svg">
+  <!-- camera at origin -->
+  <circle cx="60" cy="140" r="4" fill="#2980b9"/>
+  <text x="40" y="155" font-size="11" fill="#2980b9">camera</text>
+
+  <!-- Z axis -->
+  <line x1="60" y1="140" x2="480" y2="140" stroke="#888" stroke-dasharray="3 3"/>
+  <text x="485" y="144" font-size="11" font-style="italic">+Z</text>
+
+  <!-- image plane at f=120 -->
+  <line x1="180" y1="40" x2="180" y2="240" stroke="#444" stroke-width="1.5"/>
+  <text x="135" y="35" font-size="11">image plane</text>
+  <text x="100" y="220" font-size="10" fill="#888">distance f</text>
+  <line x1="60" y1="220" x2="180" y2="220" stroke="#888" marker-end="url(#arrSm)"/>
+
+  <!-- particle far away -->
+  <circle cx="420" cy="60" r="5" fill="#c0392b"/>
+  <text x="425" y="55" font-size="11" fill="#c0392b">(X, Y, Z)</text>
+
+  <!-- ray from camera through particle -->
+  <line x1="60" y1="140" x2="430" y2="55" stroke="#c0392b" stroke-width="1" stroke-dasharray="2 2"/>
+
+  <!-- intersection with image plane -->
+  <circle cx="180" cy="112" r="4" fill="#c0392b"/>
+  <text x="190" y="108" font-size="10" fill="#c0392b">(f·X/Z, f·Y/Z)</text>
+
+  <!-- vertical helpers -->
+  <line x1="420" y1="60" x2="420" y2="140" stroke="#bbb" stroke-dasharray="2 2"/>
+  <line x1="180" y1="112" x2="180" y2="140" stroke="#bbb" stroke-dasharray="2 2"/>
+  <text x="425" y="105" font-size="10" fill="#888">Y</text>
+  <text x="185" y="130" font-size="10" fill="#888">f·Y/Z</text>
+</svg>
+<figcaption>Pinhole projection: similar triangles relate the particle's height Y at distance Z to its image-plane height f·Y/Z at distance f. The same relation holds for X. Far-away points (large Z) project closer to the optical center, which is the source of perspective foreshortening.</figcaption>
+</figure>
+
+<p>The shader rewrites this as <code>perspScale = uFOCAL_LEN / camSpace.z</code> and then <code>camSpace.xy * perspScale</code>, plus an offset by half the viewport so the image's origin sits at the center of the screen, not the corner:</p>
+
+<pre>vec2 projected = camSpace.xy * perspScale + uVIEWPORT * 0.5;</pre>
+
+<p><code>perspScale</code> is the entire perspective effect in one scalar. The <code>1/Z</code> shrinks distant things and enlarges close ones — exactly what the eye does. (It's also why the shader bails out earlier when <code>camSpace.z &lt; uNEAR_CLIP</code>: dividing by very small or negative Z produces nonsense.)</p>
+
+<p>This is a hand-rolled projection — no projection matrix, no <code>gl_Position = P · V · M · vertex</code>. The freefall code skips the conventional matrix pipeline because it's drawing screen-space billboards: each particle becomes a 2D quad sized in pixels, so it's natural to compute pixel coordinates directly. A typical 3D engine would instead bundle this divide-by-Z into a 4×4 projection matrix and let the GPU's built-in perspective divide do the work.</p>
+
+<h3>Stage 3: pixels → clip space</h3>
+
+<p>WebGL doesn't actually want pixel coordinates in <code>gl_Position</code>; it wants <em>normalized device coordinates</em> (NDC), where the visible region is the cube from −1 to +1 on every axis. Converting pixels to NDC is one line:</p>
+
+<pre>gl_Position = vec4(projected / uVIEWPORT * 2.0 - 1.0, ndcZ, 1.0);</pre>
+
+<p>Dividing by the viewport puts the screen in [0, 1]. Multiplying by 2 and subtracting 1 stretches that to [−1, +1]. The Z component is similarly remapped from the [near, far] range to [−1, +1] so the depth buffer sees a full-resolution depth value.</p>
+
+<p>Setting <code>w = 1</code> in <code>gl_Position</code> tells the GPU to skip its automatic perspective divide. We've already done it ourselves in Stage 2.</p>
+
+<h3>The full pipeline at a glance</h3>
+
+<figure>
+<svg viewBox="0 0 660 110" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="sans-serif" font-size="11">
+    <rect x="10"  y="30" width="100" height="50" fill="#fff" stroke="#333"/>
+    <text x="60"  y="50" text-anchor="middle">world pos</text>
+    <text x="60"  y="68" text-anchor="middle" fill="#888">vec3</text>
+
+    <rect x="150" y="30" width="120" height="50" fill="#fff" stroke="#333"/>
+    <text x="210" y="50" text-anchor="middle">camera space</text>
+    <text x="210" y="68" text-anchor="middle" fill="#888">R · (p − cam)</text>
+
+    <rect x="310" y="30" width="120" height="50" fill="#fff" stroke="#333"/>
+    <text x="370" y="50" text-anchor="middle">screen pixels</text>
+    <text x="370" y="68" text-anchor="middle" fill="#888">f · X/Z, f · Y/Z</text>
+
+    <rect x="470" y="30" width="120" height="50" fill="#fff" stroke="#333"/>
+    <text x="530" y="50" text-anchor="middle">clip space (NDC)</text>
+    <text x="530" y="68" text-anchor="middle" fill="#888">[−1, +1]³</text>
+
+    <line x1="110" y1="55" x2="148" y2="55" stroke="#333" marker-end="url(#arrSm)"/>
+    <line x1="270" y1="55" x2="308" y2="55" stroke="#333" marker-end="url(#arrSm)"/>
+    <line x1="430" y1="55" x2="468" y2="55" stroke="#333" marker-end="url(#arrSm)"/>
+
+    <text x="129" y="20" text-anchor="middle">translate +</text>
+    <text x="129" y="100" text-anchor="middle" fill="#c0392b"><tspan font-style="italic">rotate (R)</tspan></text>
+    <text x="289" y="20" text-anchor="middle">divide by Z</text>
+    <text x="289" y="100" text-anchor="middle">(perspective)</text>
+    <text x="449" y="20" text-anchor="middle">rescale</text>
+    <text x="449" y="100" text-anchor="middle">to [−1, +1]</text>
+  </g>
+</svg>
+<figcaption>The vertex shader turns a 3D world position into a 2D clip-space coordinate in three steps. R appears in step 1; the rest is similar triangles and a linear remap.</figcaption>
+</figure>
+
+<p>And that's the payoff for all the matrix algebra of Sections 1–9: a single <code>uCamRot * (worldPos - uCamPos)</code> in the shader, evaluated for every vertex of every particle, every frame — turning yaw, pitch, and roll into a believable camera orbit.</p>
+
+</body>
+</html>
