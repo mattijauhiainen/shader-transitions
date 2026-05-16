@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>The Cross Product — Perpendicular Vectors and the Right-Hand Rule</title>
+<style>
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    max-width: 760px;
+    margin: 2rem auto;
+    padding: 0 1.25rem;
+    line-height: 1.6;
+    color: #222;
+    background: #fdfdfa;
+  }
+  h1, h2, h3 { font-family: "Helvetica Neue", Arial, sans-serif; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: .3rem; }
+  h2 { margin-top: 2.4rem; border-bottom: 1px solid #ccc; padding-bottom: .2rem; }
+  code, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.95em; }
+  pre {
+    background: #f3f1ea;
+    padding: .8rem 1rem;
+    overflow-x: auto;
+    border-left: 3px solid #888;
+  }
+  figure { margin: 1.5rem auto; text-align: center; }
+  figcaption {
+    font-size: 0.9em; color: #555; margin-top: .4rem; font-style: italic;
+  }
+  svg { max-width: 100%; height: auto; }
+  .key { background: #fff7d6; padding: .1em .35em; border-radius: 3px; }
+  table.compare { border-collapse: collapse; margin: 1rem 0; width: 100%; }
+  table.compare td, table.compare th {
+    border: 1px solid #aaa;
+    padding: .4rem .7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  table.compare th { background: #eee; }
+</style>
+</head>
+<body>
+
+<h1>The Cross Product</h1>
+
+<p>The dot product takes two vectors and returns a number. The cross product takes two vectors and returns <em>another vector</em> — one that's perpendicular to both inputs. This operation only really makes sense in 3D, and it's the workhorse for building coordinate systems, computing surface normals, and orienting cameras.</p>
+
+<h2>The formula</h2>
+
+<p>For 3D vectors <strong>a</strong> = (a.x, a.y, a.z) and <strong>b</strong> = (b.x, b.y, b.z):</p>
+
+<pre>a × b = ( a.y * b.z  -  a.z * b.y,
+          a.z * b.x  -  a.x * b.z,
+          a.x * b.y  -  a.y * b.x )</pre>
+
+<p>That looks intimidating. There's a pattern that makes it memorable:</p>
+
+<ul>
+  <li>For the <strong>x</strong> component of the result, use <strong>y</strong> and <strong>z</strong> of the inputs.</li>
+  <li>For the <strong>y</strong> component, use <strong>z</strong> and <strong>x</strong>.</li>
+  <li>For the <strong>z</strong> component, use <strong>x</strong> and <strong>y</strong>.</li>
+</ul>
+
+<p>The indices cycle: x → y → z → x → y → z. For each output component, you "skip" the index of that component and use the other two, in the cyclic order. Each component is <span class="mono">a[next] * b[next-next] - a[next-next] * b[next]</span>. The mnemonic isn't elegant, but writing it out a few times burns it in.</p>
+
+<h2>What it produces</h2>
+
+<p>The cross product gives you a vector with three properties:</p>
+
+<ol>
+  <li><strong>Direction:</strong> perpendicular to both <strong>a</strong> and <strong>b</strong>.</li>
+  <li><strong>Orientation:</strong> determined by the <em>right-hand rule</em> (explained below).</li>
+  <li><strong>Magnitude:</strong> equal to <span class="mono">|a| |b| sin(θ)</span> — the area of the parallelogram formed by <strong>a</strong> and <strong>b</strong>.</li>
+</ol>
+
+<figure>
+  <svg width="560" height="360" viewBox="0 0 560 360" style="background: #fafafa; border: 1px solid #ddd;">
+    <defs>
+      <marker id="arr-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#c44"/>
+      </marker>
+      <marker id="arr-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#246"/>
+      </marker>
+      <marker id="arr-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#073"/>
+      </marker>
+    </defs>
+
+    <!-- "ground plane" suggestion (oblique parallelogram filled translucent) -->
+    <polygon points="280,220 460,180 540,260 360,300" fill="#aaa" opacity="0.18" stroke="#888" stroke-dasharray="3 3"/>
+
+    <!-- vector a in the plane -->
+    <line x1="280" y1="220" x2="460" y2="180" stroke="#c44" stroke-width="3" marker-end="url(#arr-a)"/>
+    <text x="465" y="175" font-family="SF Mono, monospace" font-size="14" fill="#c44">a</text>
+
+    <!-- vector b in the plane -->
+    <line x1="280" y1="220" x2="360" y2="300" stroke="#246" stroke-width="3" marker-end="url(#arr-b)"/>
+    <text x="365" y="315" font-family="SF Mono, monospace" font-size="14" fill="#246">b</text>
+
+    <!-- cross product going "up" out of the plane -->
+    <line x1="280" y1="220" x2="280" y2="60" stroke="#073" stroke-width="3" marker-end="url(#arr-c)"/>
+    <text x="288" y="55" font-family="SF Mono, monospace" font-size="14" fill="#073">a × b</text>
+
+    <!-- the parallelogram a, b span (for area illustration) -->
+    <polygon points="280,220 460,180 540,260 360,300" fill="#fff4c8" opacity="0.7" stroke="#c97"/>
+
+    <!-- annotation -->
+    <text x="20" y="30" font-family="Helvetica" font-size="14" fill="#333">The parallelogram has area = |a × b|.</text>
+    <text x="20" y="50" font-family="Helvetica" font-size="14" fill="#333">a × b is perpendicular to the parallelogram.</text>
+  </svg>
+  <figcaption><strong>a</strong> and <strong>b</strong> span a parallelogram. The cross product <strong>a × b</strong> points perpendicular to that plane, and its length equals the parallelogram's area.</figcaption>
+</figure>
+
+<h2>The right-hand rule</h2>
+
+<p>Perpendicular to a plane has two possible directions — straight up or straight down. Which one does the cross product pick?</p>
+
+<p>Use your right hand. Point your fingers in the direction of <strong>a</strong>. Curl them toward <strong>b</strong>. Your thumb now points in the direction of <strong>a × b</strong>.</p>
+
+<p>This is why <strong>order matters</strong>: <span class="mono">a × b = -(b × a)</span>. If you swap the inputs, your curled fingers go the other way and your thumb flips.</p>
+
+<figure>
+  <svg width="500" height="240" viewBox="0 0 500 240" style="background: #fafafa; border: 1px solid #ddd;">
+    <!-- two stacked diagrams: a × b (left) and b × a (right) -->
+    <g transform="translate(20, 40)">
+      <text x="80" y="0" font-family="Helvetica" font-size="14" fill="#333" text-anchor="middle">a × b</text>
+      <line x1="80" y1="120" x2="150" y2="80" stroke="#c44" stroke-width="3" marker-end="url(#arr-a)"/>
+      <line x1="80" y1="120" x2="50" y2="180" stroke="#246" stroke-width="3" marker-end="url(#arr-b)"/>
+      <line x1="80" y1="120" x2="80" y2="40" stroke="#073" stroke-width="3" marker-end="url(#arr-c)"/>
+      <text x="158" y="78" font-family="SF Mono, monospace" font-size="13" fill="#c44">a</text>
+      <text x="44" y="195" font-family="SF Mono, monospace" font-size="13" fill="#246">b</text>
+      <text x="86" y="40" font-family="SF Mono, monospace" font-size="13" fill="#073">up</text>
+    </g>
+    <g transform="translate(260, 40)">
+      <text x="80" y="0" font-family="Helvetica" font-size="14" fill="#333" text-anchor="middle">b × a</text>
+      <line x1="80" y1="120" x2="150" y2="80" stroke="#c44" stroke-width="3" marker-end="url(#arr-a)"/>
+      <line x1="80" y1="120" x2="50" y2="180" stroke="#246" stroke-width="3" marker-end="url(#arr-b)"/>
+      <line x1="80" y1="120" x2="80" y2="200" stroke="#073" stroke-width="3" marker-end="url(#arr-c)"/>
+      <text x="158" y="78" font-family="SF Mono, monospace" font-size="13" fill="#c44">a</text>
+      <text x="44" y="195" font-family="SF Mono, monospace" font-size="13" fill="#246">b</text>
+      <text x="86" y="215" font-family="SF Mono, monospace" font-size="13" fill="#073">down</text>
+    </g>
+  </svg>
+  <figcaption>Swapping the order flips the result: <span class="mono">a × b</span> points up, <span class="mono">b × a</span> points down. Same magnitude, opposite direction.</figcaption>
+</figure>
+
+<h2>Where the formula comes from</h2>
+
+<p>The formula <span class="mono">(a.y·b.z − a.z·b.y, …)</span> didn't fall from the sky. It's <em>derived</em> by demanding that the operation has certain geometric properties and then asking: "what arithmetic gives me exactly that?" The derivation has three steps.</p>
+
+<h3>Step 1 — Write down what we want the operation to do</h3>
+
+<p>We start by listing the properties we need:</p>
+
+<ol>
+  <li><strong>Perpendicular.</strong> <span class="mono">a × b</span> is perpendicular to both <strong>a</strong> and <strong>b</strong>.</li>
+  <li><strong>Magnitude = parallelogram area.</strong> <span class="mono">|a × b| = |a| |b| sin(θ)</span> where θ is the angle between them.</li>
+  <li><strong>Right-handed orientation.</strong> If <strong>a</strong> is the world's x-axis and <strong>b</strong> is the y-axis, then <span class="mono">a × b</span> is the +z direction (not −z).</li>
+  <li><strong>Bilinear.</strong> The operation distributes over addition and scalar multiplication in each input:
+    <pre>(αu + βv) × w = α(u × w) + β(v × w)
+u × (αv + βw) = α(u × v) + β(u × w)</pre>
+    This property is what every "linear-feeling" operation has, including the dot product, matrix-vector multiplication, and so on. Without bilinearity, we couldn't expand parenthesized expressions in the way we expect.</li>
+</ol>
+
+<p>That's the whole specification. Now we work out what arithmetic satisfies it.</p>
+
+<h3>Step 2 — Apply the properties to the basis vectors</h3>
+
+<p>Let <span class="mono">x̂ = (1,0,0)</span>, <span class="mono">ŷ = (0,1,0)</span>, <span class="mono">ẑ = (0,0,1)</span>. We can immediately work out what cross-products of these basis vectors must be.</p>
+
+<p><strong>Same with same:</strong> <span class="mono">x̂ × x̂</span> must be perpendicular to <strong>x̂</strong> (so x-component is 0), and have magnitude <span class="mono">|x̂||x̂|sin(0°) = 0</span>. The only vector with zero magnitude is the zero vector. So <span class="mono">x̂ × x̂ = (0,0,0)</span>. Same logic for <strong>ŷ × ŷ</strong> and <strong>ẑ × ẑ</strong>.</p>
+
+<p><strong>Different basis vectors:</strong> <span class="mono">x̂ × ŷ</span> must be perpendicular to both x̂ and ŷ, which leaves only the z-axis (up or down). Its magnitude is <span class="mono">|x̂||ŷ|sin(90°) = 1·1·1 = 1</span>. Right-handed orientation picks +z. So <span class="mono">x̂ × ŷ = ẑ</span>. By the same logic and cyclic symmetry:</p>
+
+<pre>x̂ × ŷ =  ẑ        ŷ × x̂ = -ẑ
+ŷ × ẑ =  x̂        ẑ × ŷ = -x̂
+ẑ × x̂ =  ŷ        x̂ × ẑ = -ŷ</pre>
+
+<p>The right-hand pairs come from property 4 applied with α = -1 (swapping inputs negates the result, which we can derive: <span class="mono">a × a = 0</span> for any a, so <span class="mono">(a + b) × (a + b) = 0</span>; expanding by bilinearity gives <span class="mono">a × b + b × a = 0</span>, i.e. <span class="mono">b × a = -(a × b)</span>).</p>
+
+<p><span class="key">These nine basis-pair results are all the geometric information we need.</span> Everything else follows from bilinearity.</p>
+
+<h3>Step 3 — Expand a general cross product using bilinearity</h3>
+
+<p>Any 3D vector can be written as a combination of basis vectors:</p>
+
+<pre>a = a.x·x̂ + a.y·ŷ + a.z·ẑ
+b = b.x·x̂ + b.y·ŷ + b.z·ẑ</pre>
+
+<p>So:</p>
+
+<pre>a × b = (a.x·x̂ + a.y·ŷ + a.z·ẑ) × (b.x·x̂ + b.y·ŷ + b.z·ẑ)</pre>
+
+<p>By bilinearity, we expand this into all 9 pairwise products:</p>
+
+<pre>= a.x·b.x (x̂ × x̂)  +  a.x·b.y (x̂ × ŷ)  +  a.x·b.z (x̂ × ẑ)
++ a.y·b.x (ŷ × x̂)  +  a.y·b.y (ŷ × ŷ)  +  a.y·b.z (ŷ × ẑ)
++ a.z·b.x (ẑ × x̂)  +  a.z·b.y (ẑ × ŷ)  +  a.z·b.z (ẑ × ẑ)</pre>
+
+<p>Now substitute what each basis-pair cross product equals (from Step 2):</p>
+
+<pre>= a.x·b.x ·  0   +  a.x·b.y ·  ẑ   +  a.x·b.z · -ŷ
++ a.y·b.x · -ẑ   +  a.y·b.y ·  0   +  a.y·b.z ·  x̂
++ a.z·b.x ·  ŷ   +  a.z·b.y · -x̂   +  a.z·b.z ·  0</pre>
+
+<p>The three "same with same" terms vanish. The remaining six group naturally by which basis vector they contribute to:</p>
+
+<pre>x̂ coefficient:  a.y·b.z - a.z·b.y
+ŷ coefficient:  a.z·b.x - a.x·b.z
+ẑ coefficient:  a.x·b.y - a.y·b.x</pre>
+
+<p>And that's the formula. It's not a magical recipe — it's the unique arithmetic that satisfies the four geometric requirements we started from.</p>
+
+<h3>Why the cyclic pattern shows up</h3>
+
+<p>The cyclic order <strong>x → y → z → x</strong> in the formula is a direct reflection of the cyclic order of <span class="mono">x̂ × ŷ = ẑ, ŷ × ẑ = x̂, ẑ × x̂ = ŷ</span>. Those three identities are <em>the</em> definition of a right-handed coordinate system. The formula's pattern is just bookkeeping that propagates that orientation through the bilinear expansion.</p>
+
+<p>This is also why <strong>the cross product is intrinsically 3D</strong>: the existence of a unique perpendicular direction (up to sign) only works in 3D. In 2D, the "perpendicular" of two vectors would just be a number (signed area). In 4D and up, there are too many perpendicular directions to pick from. 3D is special.</p>
+
+<h2>Comparison with the dot product</h2>
+
+<table class="compare">
+  <tr><th></th><th>Dot product <span class="mono">a · b</span></th><th>Cross product <span class="mono">a × b</span></th></tr>
+  <tr><td>Returns</td><td>A number (scalar)</td><td>A vector</td></tr>
+  <tr><td>Formula uses</td><td><span class="mono">|a| |b| cos(θ)</span></td><td><span class="mono">|a| |b| sin(θ)</span> for magnitude</td></tr>
+  <tr><td>Zero when</td><td>The vectors are perpendicular (θ = 90°)</td><td>The vectors are parallel (θ = 0° or 180°)</td></tr>
+  <tr><td>Maximum when</td><td>The vectors are parallel</td><td>The vectors are perpendicular</td></tr>
+  <tr><td>Commutative?</td><td>Yes: <span class="mono">a · b = b · a</span></td><td>No: <span class="mono">a × b = -(b × a)</span></td></tr>
+  <tr><td>Geometric meaning</td><td>Projection / shadow length</td><td>Perpendicular vector / parallelogram area</td></tr>
+  <tr><td>Works in</td><td>Any dimension</td><td>3D only (truly — there are oddities in 7D, but ignore that)</td></tr>
+</table>
+
+<h2>Where this lives in your codebase</h2>
+
+<h3>Building a camera's right axis (<code>lookAt</code>)</h3>
+
+<p>Given the camera's forward direction <strong>f</strong> and a world "up" hint <strong>up</strong> (usually <span class="mono">(0, 1, 0)</span>), how do you find the camera's right axis?</p>
+
+<pre>const s = normalize(cross(f, up));</pre>
+
+<p>The cross product of "forward" and "up" produces a vector perpendicular to both — which is "right" by construction. Normalizing makes it unit length so we have a proper basis vector.</p>
+
+<p>This is a perfect example of the cross product being the right tool: we don't care about the angle between forward and up; we just want a vector orthogonal to both, and we want a specific orientation (right, not left). The cross product gives us both with one operation.</p>
+
+<h3>Re-orthogonalizing the up axis (<code>lookAt</code>, continued)</h3>
+
+<pre>const u = cross(s, f);</pre>
+
+<p>The world-up hint might not be exactly perpendicular to the camera's forward. The cross product of "right" and "forward" gives us a guaranteed-perpendicular "up" that's consistent with the camera's orientation. This is how <span class="mono">lookAt</span> produces a clean orthonormal basis even when the input "up" was approximate.</p>
+
+<h3>Surface normals from two edge vectors</h3>
+
+<p>If a triangle has edge vectors <strong>e1</strong> and <strong>e2</strong> along two of its sides, then <span class="mono">cross(e1, e2)</span> is perpendicular to the triangle's surface. Normalize and you have the surface normal for lighting. (Not used directly in your codebase yet — your lighting works on per-billboard normals derived from screen-space distance — but it's the standard technique once you start handling real meshes.)</p>
+
+<h2>Sign and orientation: why graphics is fussy about this</h2>
+
+<p>Because <span class="mono">cross(a, b) = -cross(b, a)</span>, the order of arguments matters for orientation. Get the order wrong in <span class="mono">lookAt</span> and your camera ends up flipped (everything appears mirrored). Get the order wrong when computing a surface normal and your lighting goes inside-out (front faces look dark, back faces look bright).</p>
+
+<p>The convention is: if you want a right-handed coordinate system (the standard in OpenGL/WebGL), the right axis is <span class="mono">cross(forward, up)</span> — not <span class="mono">cross(up, forward)</span>. Memorize the order, or always verify with the right-hand rule on a known case.</p>
+
+<h2>Quick sanity check you can do in your head</h2>
+
+<p>Consider the basis vectors:</p>
+
+<pre>x̂ × ŷ = ẑ
+ŷ × ẑ = x̂
+ẑ × x̂ = ŷ</pre>
+
+<p>These three identities define the right-handed coordinate system. Plug them into the formula and verify — e.g. <span class="mono">x̂ × ŷ = (1,0,0) × (0,1,0)</span>. Working through the formula:</p>
+
+<pre>x component: 0 * 0 - 0 * 1 = 0
+y component: 0 * 0 - 1 * 0 = 0
+z component: 1 * 1 - 0 * 0 = 1</pre>
+
+<p>Result: <span class="mono">(0, 0, 1) = ẑ</span>. ✓</p>
+
+<p>If you ever forget the cyclic order, just reconstruct <span class="mono">x̂ × ŷ = ẑ</span> in your head — that tells you which component uses which inputs, and the rest follows by cyclic permutation.</p>
+
+</body>
+</html>

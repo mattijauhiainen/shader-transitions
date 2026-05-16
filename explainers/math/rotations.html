@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Rotation Matrices — Why cos and sin Land Where They Do</title>
+<style>
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    max-width: 760px;
+    margin: 2rem auto;
+    padding: 0 1.25rem;
+    line-height: 1.6;
+    color: #222;
+    background: #fdfdfa;
+  }
+  h1, h2, h3 { font-family: "Helvetica Neue", Arial, sans-serif; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: .3rem; }
+  h2 { margin-top: 2.4rem; border-bottom: 1px solid #ccc; padding-bottom: .2rem; }
+  code, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.95em; }
+  pre {
+    background: #f3f1ea;
+    padding: .8rem 1rem;
+    overflow-x: auto;
+    border-left: 3px solid #888;
+  }
+  figure { margin: 1.5rem auto; text-align: center; }
+  figcaption {
+    font-size: 0.9em; color: #555; margin-top: .4rem; font-style: italic;
+  }
+  svg { max-width: 100%; height: auto; }
+  .key { background: #fff7d6; padding: .1em .35em; border-radius: 3px; }
+  .demo-button {
+    font-family: inherit; padding: 0.4rem 0.9rem;
+    border: 1px solid #888; background: #eee; cursor: pointer;
+    border-radius: 4px;
+  }
+  .demo-button.active { background: #246; color: #fff; border-color: #246; }
+  .demo-button:hover { background: #ddd; }
+  .demo-button.active:hover { background: #357; }
+  .matrix-readout {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    background: #f3f1ea;
+    padding: .6rem .9rem;
+    border-left: 3px solid #888;
+    margin: 0.8rem 0;
+    display: inline-block;
+    white-space: pre;
+    text-align: left;
+  }
+  input[type="range"] { width: 360px; vertical-align: middle; }
+  .axis-x { color: #c44; }
+  .axis-y { color: #246; }
+  .axis-z { color: #073; }
+</style>
+</head>
+<body>
+
+<h1>Rotation Matrices</h1>
+
+<p>A rotation matrix is just a specific kind of linear transformation: one that rotates vectors around a fixed origin without stretching, shearing, or reflecting them. As with all matrices, the entire matrix is determined by <strong>where the basis vectors go</strong>. So the entire question "what does the rotation matrix look like?" reduces to: "where do x̂, ŷ, and ẑ land after rotating?"</p>
+
+<p>This explainer starts in 2D, where the picture is clear, then lifts to 3D.</p>
+
+<h2>2D rotation: where do x̂ and ŷ go?</h2>
+
+<p>Imagine rotating the entire plane by angle θ counter-clockwise. The basis vectors swing too:</p>
+
+<ul>
+  <li><strong>x̂</strong> = (1, 0) was pointing right. After rotating by θ, it points in direction <span class="mono">(cos θ, sin θ)</span>.</li>
+  <li><strong>ŷ</strong> = (0, 1) was pointing up. After rotating by θ, it points in direction <span class="mono">(-sin θ, cos θ)</span>.</li>
+</ul>
+
+<p>Why? Each basis vector has length 1 and starts at a known angle (0° for x̂, 90° for ŷ). After rotating by θ, x̂ ends up at angle θ, which in coordinates is <span class="mono">(cos θ, sin θ)</span> by the definition of cosine and sine. ŷ ends up at angle 90° + θ, and using the identities <span class="mono">cos(90° + θ) = -sin θ</span> and <span class="mono">sin(90° + θ) = cos θ</span>, that's <span class="mono">(-sin θ, cos θ)</span>.</p>
+
+<p>From the previous explainer: <span class="key">columns of the matrix are the destinations of the basis vectors</span>. So we just stack these two destinations as columns:</p>
+
+<pre>R(θ) = ┌ cos θ   -sin θ ┐
+       └ sin θ    cos θ ┘
+        ↑          ↑
+        where      where
+        x̂ went     ŷ went</pre>
+
+<p>That's it. No memorization. The matrix is built by asking "where do my basis vectors go," and trigonometry gives the answer.</p>
+
+<h2>Watch it happen</h2>
+
+<p>Drag the slider to spin the basis vectors. The matrix updates in real time. Notice that the two columns are always exactly where the red (x̂) and blue (ŷ) arrows point.</p>
+
+<figure>
+  <svg id="rot2d-demo" width="400" height="400" viewBox="0 0 400 400" style="background: #fafafa; border: 1px solid #ddd;">
+    <defs>
+      <marker id="r2-arr-x" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#c44"/>
+      </marker>
+      <marker id="r2-arr-y" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#246"/>
+      </marker>
+    </defs>
+
+    <!-- background grid -->
+    <g id="r2-grid" stroke="#e7e7e7" stroke-width="1"></g>
+    <line x1="0" y1="200" x2="400" y2="200" stroke="#ccc" stroke-width="1"/>
+    <line x1="200" y1="0" x2="200" y2="400" stroke="#ccc" stroke-width="1"/>
+
+    <!-- ghost original basis (faded) -->
+    <line x1="200" y1="200" x2="320" y2="200" stroke="#c44" stroke-width="1.5" opacity="0.3" stroke-dasharray="4 3"/>
+    <line x1="200" y1="200" x2="200" y2="80" stroke="#246" stroke-width="1.5" opacity="0.3" stroke-dasharray="4 3"/>
+
+    <!-- rotated F shape -->
+    <polygon id="r2-f" fill="#c8f0c8" stroke="#080" stroke-width="1.5" opacity="0.6"/>
+
+    <!-- rotated basis -->
+    <line id="r2-vec-x" x1="200" y1="200" x2="320" y2="200" stroke="#c44" stroke-width="3" marker-end="url(#r2-arr-x)"/>
+    <line id="r2-vec-y" x1="200" y1="200" x2="200" y2="80" stroke="#246" stroke-width="3" marker-end="url(#r2-arr-y)"/>
+
+    <text x="10" y="20" font-family="Helvetica" font-size="13" fill="#555">Dashed: original x̂ and ŷ. Solid: after rotation.</text>
+  </svg>
+  <div style="margin-top: 0.5rem;">
+    <label>θ = <span id="r2-angle-label" class="mono">0.0°</span></label>
+    <br/>
+    <input type="range" id="r2-slider" min="-360" max="360" value="0" step="1"/>
+  </div>
+  <div class="matrix-readout" id="r2-matrix">R(0°) = [ 1.00  0.00 ]
+        [ 0.00  1.00 ]</div>
+</figure>
+
+<script>
+(() => {
+  const ox = 200, oy = 200, SCALE = 120;
+  const sx = (x) => ox + x * SCALE;
+  const sy = (y) => oy - y * SCALE;
+
+  const grid = document.getElementById('r2-grid');
+  for (let g = -2; g <= 2; g++) {
+    grid.insertAdjacentHTML('beforeend',
+      `<line x1="${sx(g)}" y1="0" x2="${sx(g)}" y2="400"/>` +
+      `<line x1="0" y1="${sy(g)}" x2="400" y2="${sy(g)}"/>`);
+  }
+
+  const vecX = document.getElementById('r2-vec-x');
+  const vecY = document.getElementById('r2-vec-y');
+  const fShape = document.getElementById('r2-f');
+  const slider = document.getElementById('r2-slider');
+  const angleLabel = document.getElementById('r2-angle-label');
+  const matrixOut = document.getElementById('r2-matrix');
+
+  // Small F shape in unit space
+  const F = [
+    [0, 0], [0, 1.3], [1, 1.3], [1, 1.0], [0.25, 1.0],
+    [0.25, 0.7], [0.7, 0.7], [0.7, 0.4], [0.25, 0.4], [0.25, 0],
+  ];
+
+  function update() {
+    const deg = +slider.value;
+    const t = deg * Math.PI / 180;
+    const c = Math.cos(t), s = Math.sin(t);
+
+    // x̂ went to (c, s); ŷ went to (-s, c).
+    vecX.setAttribute('x2', sx(c));
+    vecX.setAttribute('y2', sy(s));
+    vecY.setAttribute('x2', sx(-s));
+    vecY.setAttribute('y2', sy(c));
+
+    // Rotate F
+    fShape.setAttribute('points',
+      F.map(([x, y]) => `${sx(c*x + (-s)*y)},${sy(s*x + c*y)}`).join(' '));
+
+    angleLabel.textContent = `${deg.toFixed(1)}°`;
+    matrixOut.textContent =
+      `R(${deg}°) = [ ${c.toFixed(2)}  ${(-s).toFixed(2)} ]\n        [ ${s.toFixed(2)}   ${c.toFixed(2)} ]`;
+  }
+
+  slider.addEventListener('input', update);
+  update();
+})();
+</script>
+
+<h2>From 2D to 3D: rotation needs an axis</h2>
+
+<p>In 2D, you only need a single angle to specify a rotation. In 3D, rotation needs more: you have to say which <strong>axis</strong> you're rotating around. Spinning a globe around a vertical pole is different from tipping it forward; both are rotations.</p>
+
+<p>The simplest 3D rotations are around one of the three coordinate axes. Each of them is, in essence, a 2D rotation that happens in the plane <em>perpendicular</em> to the axis:</p>
+
+<ul>
+  <li><strong>Rotation around x</strong>: the x-axis stays fixed; y and z swap places. (Like tipping a book forward.)</li>
+  <li><strong>Rotation around y</strong>: the y-axis stays fixed; z and x swap places. (Like spinning on a vertical pole.)</li>
+  <li><strong>Rotation around z</strong>: the z-axis stays fixed; x and y swap places. (Like the 2D case above, embedded in 3D.)</li>
+</ul>
+
+<p>Each of these is the same trigonometry as the 2D case — just applied to whichever pair of coordinates are rotating. The third coordinate (the axis you're rotating around) is left alone.</p>
+
+<h2>The three matrices</h2>
+
+<p>Let's build them by asking the same question as before: <strong>where does each basis vector go?</strong></p>
+
+<h3>Rotation around the x-axis: R<sub>x</sub>(θ)</h3>
+
+<p>The x-axis is fixed — so x̂ goes to itself, <span class="mono">(1, 0, 0)</span>. The y and z axes rotate by θ in the y-z plane. Treating that as a 2D rotation:</p>
+
+<ul>
+  <li>ŷ = (0, 1, 0) lands at <span class="mono">(0, cos θ, sin θ)</span></li>
+  <li>ẑ = (0, 0, 1) lands at <span class="mono">(0, -sin θ, cos θ)</span></li>
+</ul>
+
+<p>Stack these as columns of a 3×3 matrix:</p>
+
+<pre>R<sub>x</sub>(θ) = ┌ 1    0       0   ┐
+        │ 0  cos θ  -sin θ │
+        └ 0  sin θ   cos θ ┘</pre>
+
+<h3>Rotation around the y-axis: R<sub>y</sub>(θ)</h3>
+
+<p>The y-axis is fixed — so ŷ stays at <span class="mono">(0, 1, 0)</span>. The other two rotate in the z-x plane:</p>
+
+<ul>
+  <li>ẑ = (0, 0, 1) lands at <span class="mono">(sin θ, 0, cos θ)</span></li>
+  <li>x̂ = (1, 0, 0) lands at <span class="mono">(cos θ, 0, -sin θ)</span></li>
+</ul>
+
+<pre>R<sub>y</sub>(θ) = ┌ cos θ   0   sin θ ┐
+        │   0     1    0    │
+        └ -sin θ  0   cos θ ┘</pre>
+
+<h3>Rotation around the z-axis: R<sub>z</sub>(θ)</h3>
+
+<p>The z-axis is fixed — ẑ stays at <span class="mono">(0, 0, 1)</span>. The 2D rotation happens in the x-y plane, exactly as in our earlier 2D derivation:</p>
+
+<pre>R<sub>z</sub>(θ) = ┌ cos θ  -sin θ   0 ┐
+        │ sin θ   cos θ   0 │
+        └   0       0     1 ┘</pre>
+
+<h2>Why the patterns differ</h2>
+
+<p>Look at the three matrices side by side. Each has a fixed "axis row" and a fixed "axis column" that contain <span class="mono">1</span> on the diagonal and <span class="mono">0</span> everywhere else. The 2×2 rotation block lives in the <em>other</em> two rows/columns.</p>
+
+<p>What's tricky is R<sub>y</sub>: the off-diagonal terms look "backwards" compared to R<sub>x</sub> and R<sub>z</sub>. The <span class="mono">sin θ</span> sits at row 0, col 2 (positive), and the <span class="mono">-sin θ</span> sits at row 2, col 0. In R<sub>x</sub> and R<sub>z</sub> the sign is the other way around.</p>
+
+<p>This is not a mistake or a quirk — it falls out of the right-handed-orientation convention. The cyclic order of basis-vector cross products is <span class="mono">x̂ × ŷ = ẑ, ŷ × ẑ = x̂, ẑ × x̂ = ŷ</span>. For R<sub>x</sub>, the rotating pair is (ŷ → ẑ), which follows the cyclic order. For R<sub>z</sub>, it's (x̂ → ŷ), also cyclic. But for R<sub>y</sub>, the rotating pair is (ẑ → x̂), also cyclic — and that's precisely what flips the sign positions. The middle axis's rotation runs <em>against</em> the visual layout of the matrix, even though it's geometrically consistent with the other two.</p>
+
+<p>If you want to avoid memorizing three slightly different sign patterns, just <strong>rederive each one as you need it</strong> by asking "where does each basis vector go?" The trigonometry doesn't lie.</p>
+
+<h2>Interactive 3D rotation</h2>
+
+<p>Pick which axis to rotate around, then drag the slider. The cube is shown in a simple isometric projection — not real perspective, but enough to see the geometry. Notice that the fixed axis (highlighted) doesn't move; the other two swing around it.</p>
+
+<figure>
+  <div style="margin-bottom: 0.6rem;">
+    Rotate around:
+    <button class="demo-button active" id="ax-x">X axis</button>
+    <button class="demo-button" id="ax-y">Y axis</button>
+    <button class="demo-button" id="ax-z">Z axis</button>
+  </div>
+  <svg id="rot3d-demo" width="480" height="380" viewBox="0 0 480 380" style="background: #fafafa; border: 1px solid #ddd;">
+    <defs>
+      <marker id="r3-arr-x" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#c44"/></marker>
+      <marker id="r3-arr-y" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#246"/></marker>
+      <marker id="r3-arr-z" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#073"/></marker>
+    </defs>
+    <g id="r3-scene"></g>
+  </svg>
+  <div style="margin-top: 0.5rem;">
+    <label>θ = <span id="r3-angle-label" class="mono">0.0°</span></label>
+    <br/>
+    <input type="range" id="r3-slider" min="-180" max="180" value="0" step="1"/>
+  </div>
+  <div class="matrix-readout" id="r3-matrix"></div>
+  <figcaption>The thick highlighted arrow is the axis of rotation — it never moves. The other two basis vectors swing around it in the perpendicular plane.</figcaption>
+</figure>
+
+<script>
+(() => {
+  // Simple isometric-ish projection.
+  // World axes: x right-ish, y up, z toward viewer (out of screen).
+  // Project (x, y, z) -> screen (px, py).
+  const cx = 240, cy = 200, scale = 90;
+  const a = Math.PI / 6; // 30° iso tilt
+  function project(x, y, z) {
+    // Project: rotate around y, then around x to fake iso
+    const px = cx + (x - z) * scale * Math.cos(a);
+    const py = cy - y * scale - (x + z) * scale * Math.sin(a);
+    return [px, py];
+  }
+
+  let axis = 'x';
+  let angle = 0;
+
+  const scene = document.getElementById('r3-scene');
+  const slider = document.getElementById('r3-slider');
+  const angleLabel = document.getElementById('r3-angle-label');
+  const matrixOut = document.getElementById('r3-matrix');
+
+  function rotate(p) {
+    const [x, y, z] = p;
+    const t = angle * Math.PI / 180;
+    const c = Math.cos(t), s = Math.sin(t);
+    if (axis === 'x') return [x, c*y - s*z, s*y + c*z];
+    if (axis === 'y') return [c*x + s*z, y, -s*x + c*z];
+    return [c*x - s*y, s*x + c*y, z];
+  }
+
+  function arrow(p1, p2, color, marker, thick) {
+    const [x1, y1] = project(...p1);
+    const [x2, y2] = project(...p2);
+    return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="${thick}" marker-end="url(#${marker})"/>`;
+  }
+  function dashed(p1, p2, color) {
+    const [x1, y1] = project(...p1);
+    const [x2, y2] = project(...p2);
+    return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="1.2" opacity="0.35" stroke-dasharray="4 3"/>`;
+  }
+  function label(p, txt, color) {
+    const [x, y] = project(...p);
+    return `<text x="${x+6}" y="${y-4}" font-family="SF Mono, monospace" font-size="13" fill="${color}">${txt}</text>`;
+  }
+
+  function render() {
+    const ex = rotate([1, 0, 0]);
+    const ey = rotate([0, 1, 0]);
+    const ez = rotate([0, 0, 1]);
+
+    let svg = '';
+    // ghost original axes
+    svg += dashed([0, 0, 0], [1, 0, 0], '#c44');
+    svg += dashed([0, 0, 0], [0, 1, 0], '#246');
+    svg += dashed([0, 0, 0], [0, 0, 1], '#073');
+
+    // rotated axes, thicker if fixed
+    svg += arrow([0,0,0], ex, '#c44', 'r3-arr-x', axis === 'x' ? 5 : 3);
+    svg += label(ex, 'x̂', '#c44');
+    svg += arrow([0,0,0], ey, '#246', 'r3-arr-y', axis === 'y' ? 5 : 3);
+    svg += label(ey, 'ŷ', '#246');
+    svg += arrow([0,0,0], ez, '#073', 'r3-arr-z', axis === 'z' ? 5 : 3);
+    svg += label(ez, 'ẑ', '#073');
+
+    scene.innerHTML = svg;
+
+    angleLabel.textContent = `${angle.toFixed(1)}°`;
+    const t = angle * Math.PI / 180;
+    const c = Math.cos(t), s = Math.sin(t);
+    if (axis === 'x') {
+      matrixOut.textContent =
+        `R_x(${angle}°) = [ 1   0      0    ]\n           [ 0  ${c.toFixed(2)}  ${(-s).toFixed(2)} ]\n           [ 0  ${s.toFixed(2)}   ${c.toFixed(2)} ]`;
+    } else if (axis === 'y') {
+      matrixOut.textContent =
+        `R_y(${angle}°) = [ ${c.toFixed(2)}   0  ${s.toFixed(2)} ]\n           [  0    1   0   ]\n           [ ${(-s).toFixed(2)}  0  ${c.toFixed(2)} ]`;
+    } else {
+      matrixOut.textContent =
+        `R_z(${angle}°) = [ ${c.toFixed(2)}  ${(-s).toFixed(2)}  0 ]\n           [ ${s.toFixed(2)}   ${c.toFixed(2)}  0 ]\n           [  0     0    1 ]`;
+    }
+  }
+
+  slider.addEventListener('input', () => { angle = +slider.value; render(); });
+  function setAxis(a) {
+    axis = a;
+    document.querySelectorAll('[id^="ax-"]').forEach(b => b.classList.remove('active'));
+    document.getElementById('ax-' + a).classList.add('active');
+    render();
+  }
+  document.getElementById('ax-x').addEventListener('click', () => setAxis('x'));
+  document.getElementById('ax-y').addEventListener('click', () => setAxis('y'));
+  document.getElementById('ax-z').addEventListener('click', () => setAxis('z'));
+
+  render();
+})();
+</script>
+
+<h2>The right-hand rule sets the sign</h2>
+
+<p>"Counter-clockwise" is ambiguous in 3D — it depends which way you're looking. The convention is the <strong>right-hand rule</strong>: point your right thumb along the axis of rotation. Your fingers curl in the positive-θ direction.</p>
+
+<p>So if you point your right thumb along +x, your fingers curl <em>from +y toward +z</em>. That's why R<sub>x</sub>(90°) sends ŷ to ẑ: it's the positive direction of rotation around x.</p>
+
+<p>Test it on the interactive: select X-axis rotation, set θ = 90°. The blue (ŷ) arrow should swing onto the green (ẑ) direction. If your code does the opposite, you've got a sign flipped somewhere in the matrix — the standard symptom is "my world appears mirrored" or "my rotation goes the wrong way."</p>
+
+<h2>Column-major storage in code</h2>
+
+<p>The matrices above are written in math notation (rows of the matrix, top to bottom, left to right). In your code, they're stored in a flat <span class="mono">Float32Array</span> in <em>column-major</em> order. The mapping for a 3×3 matrix is:</p>
+
+<pre>┌ a  b  c ┐                              storage:
+│ d  e  f │   ↔   [a, d, g,  b, e, h,  c, f, i]
+└ g  h  i ┘            ↑       ↑       ↑
+                    column 0  col 1  col 2</pre>
+
+<p>For your R<sub>x</sub> in column-major storage:</p>
+
+<pre>R_x[0] = 1    R_x[3] = 0       R_x[6] = 0
+R_x[1] = 0    R_x[4] = cos θ   R_x[7] = -sin θ
+R_x[2] = 0    R_x[5] = sin θ   R_x[8] = cos θ</pre>
+
+<p>The <span class="mono">-sin θ</span> in the math matrix lives at row 1, column 2 — which is storage index <span class="mono">2*3 + 1 = 7</span>. The <span class="mono">sin θ</span> at row 2, column 1 is at <span class="mono">1*3 + 2 = 5</span>. <span class="key">Same numbers, different layout in memory.</span></p>
+
+<p>The 4×4 versions used in graphics are identical except padded with an extra row and column from the identity matrix (the homogeneous coordinate, for translations). For R<sub>x</sub> in your <span class="mono">mat4.ts</span>:</p>
+
+<pre>const Rx = new Float32Array([
+  1, 0, 0, 0,         // column 0
+  0, c, s, 0,         // column 1  ← c at row 1, s at row 2
+  0, -s, c, 0,        // column 2  ← -s at row 1, c at row 2
+  0, 0, 0, 1,         // column 3
+]);</pre>
+
+<p>The pattern from before holds: read across — that gives you <em>columns</em>, not rows. If you try to fill the matrix by reading across a row of the math notation and writing four consecutive array entries, you end up with the transpose. (That's the bug we hit when first implementing this.)</p>
+
+<h2>Composing rotations</h2>
+
+<p>To rotate first around x and then around y, you multiply the matrices in that order — <strong>right to left</strong>:</p>
+
+<pre>combined = R_y · R_x</pre>
+
+<p>When applied to a vector <strong>v</strong>: <span class="mono">combined · v = R_y · (R_x · v)</span>. R<sub>x</sub> acts first.</p>
+
+<p>Three things to remember about composing rotations:</p>
+
+<ol>
+  <li><strong>Order matters.</strong> R<sub>y</sub>·R<sub>x</sub> ≠ R<sub>x</sub>·R<sub>y</sub> in general. Try it: tip a book forward 90° then yaw 90° versus yaw first then tip — you end up facing different directions.</li>
+  <li><strong>The result is still a rotation.</strong> The product of two rotation matrices is another rotation matrix. The space of rotations is closed under composition (in math language, it's a group — the special orthogonal group SO(3)).</li>
+  <li><strong>Gimbal lock.</strong> Chaining three axis rotations (Euler angles: rotate around x, then y, then z) can hit a degenerate configuration where two of the rotation axes line up, leaving you with only two degrees of freedom instead of three. This is one reason quaternions are popular for 3D rotation — they don't have this problem. But for graphics where you compose a few rotations per frame and never chain them long-term, Euler angles are fine.</li>
+</ol>
+
+<h2>Connection to your <code>mat4.ts</code></h2>
+
+<p>Your <span class="mono">rotateX(out, m, angle)</span> function follows the standard convention: it computes <span class="mono">out = m · R_x(angle)</span>. This is multiplication on the <em>right</em>, which means the rotation is applied in the local coordinate system of whatever transformation <span class="mono">m</span> already represents.</p>
+
+<p>If you want to rotate in world space instead — applying the rotation <em>before</em> any other transformations <span class="mono">m</span> represents — you'd compute <span class="mono">out = R_x(angle) · m</span> instead. Both are useful in different contexts; the convention in most graphics libraries is the "right-multiply for local rotation" version, which is what you have.</p>
+
+<p>For typical use cases — "start with identity, then rotate, then translate, then scale" — you build the model matrix up by chained right-multiplications, and the resulting model matrix applies its transformations in the same order to a point in object space.</p>
+
+</body>
+</html>

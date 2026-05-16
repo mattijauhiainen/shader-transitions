@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Matrix Multiplication — How and Why</title>
+<style>
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    max-width: 760px;
+    margin: 2rem auto;
+    padding: 0 1.25rem;
+    line-height: 1.6;
+    color: #222;
+    background: #fdfdfa;
+  }
+  h1, h2, h3 { font-family: "Helvetica Neue", Arial, sans-serif; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: .3rem; }
+  h2 { margin-top: 2.4rem; border-bottom: 1px solid #ccc; padding-bottom: .2rem; }
+  code, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.95em; }
+  pre {
+    background: #f3f1ea;
+    padding: .8rem 1rem;
+    overflow-x: auto;
+    border-left: 3px solid #888;
+  }
+  figure { margin: 1.5rem auto; text-align: center; }
+  figcaption {
+    font-size: 0.9em; color: #555; margin-top: .4rem; font-style: italic;
+  }
+  svg { max-width: 100%; height: auto; }
+  .key { background: #fff7d6; padding: .1em .35em; border-radius: 3px; }
+  .matrix-grid { border-collapse: collapse; display: inline-block; margin: 0 .4em; vertical-align: middle; }
+  .matrix-grid td {
+    width: 36px; height: 36px;
+    text-align: center;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 14px;
+    border: 1px solid #ddd;
+  }
+  .bracketed {
+    display: inline-block;
+    border-left: 2px solid #333;
+    border-right: 2px solid #333;
+    padding: 2px 4px;
+    margin: 0 .3em;
+    vertical-align: middle;
+  }
+  .demo-button {
+    font-family: inherit; padding: 0.4rem 0.9rem;
+    border: 1px solid #888; background: #eee; cursor: pointer;
+    border-radius: 4px;
+  }
+  .demo-button:hover { background: #ddd; }
+  .hl-row { background: #fde3b0 !important; }
+  .hl-col { background: #b0d8fd !important; }
+  .hl-out { background: #c8f0c8 !important; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>Matrix Multiplication</h1>
+
+<p>Matrices are tables of numbers. Multiplying two matrices produces a third matrix, computed by a very specific recipe. Once you internalize the recipe, you realize it's just a lot of dot products glued together.</p>
+
+<h2>The recipe</h2>
+
+<p>Given two matrices <strong>A</strong> and <strong>B</strong>, the product <strong>C = A × B</strong> has entries:</p>
+
+<pre>C[row][col] = dot product of row `row` of A with column `col` of B</pre>
+
+<p>In a formula, summed over <strong>k</strong>:</p>
+
+<pre>C[i][j] = Σ A[i][k] × B[k][j]</pre>
+
+<p>That's it. Every entry of the output is one dot product. A 4×4 times 4×4 produces a 4×4 matrix with 16 entries, so it's 16 dot products. Each dot product sums 4 multiplications. <strong>64 multiplications + 48 additions in total</strong>.</p>
+
+<h2>Watch it happen, one cell at a time</h2>
+
+<p>Click <strong>Next</strong> to fill in one output cell at a time. Each step highlights the row of A and the column of B being dot-producted to make the output cell.</p>
+
+<figure>
+  <div class="bracketed">
+    <table class="matrix-grid" id="mat-a">
+      <tr><td>1</td><td>2</td><td>3</td></tr>
+      <tr><td>4</td><td>5</td><td>6</td></tr>
+      <tr><td>7</td><td>8</td><td>9</td></tr>
+    </table>
+  </div>
+  <span style="font-size: 18px;">×</span>
+  <div class="bracketed">
+    <table class="matrix-grid" id="mat-b">
+      <tr><td>1</td><td>0</td><td>2</td></tr>
+      <tr><td>0</td><td>1</td><td>3</td></tr>
+      <tr><td>1</td><td>1</td><td>0</td></tr>
+    </table>
+  </div>
+  <span style="font-size: 18px;">=</span>
+  <div class="bracketed">
+    <table class="matrix-grid" id="mat-c">
+      <tr><td>·</td><td>·</td><td>·</td></tr>
+      <tr><td>·</td><td>·</td><td>·</td></tr>
+      <tr><td>·</td><td>·</td><td>·</td></tr>
+    </table>
+  </div>
+  <div style="margin-top: 1rem;">
+    <button class="demo-button" id="prev-btn">Prev</button>
+    <button class="demo-button" id="next-btn">Next</button>
+    <button class="demo-button" id="reset-btn">Reset</button>
+  </div>
+  <div id="step-readout" style="margin-top: 1rem; font-family: 'SF Mono', monospace; font-size: 14px; color: #444;">Step 0: empty result.</div>
+  <figcaption>Yellow = row of A, blue = column of B, green = the dot product of those two filling in the output cell.</figcaption>
+</figure>
+
+<script>
+(() => {
+  const A = [[1,2,3],[4,5,6],[7,8,9]];
+  const B = [[1,0,2],[0,1,3],[1,1,0]];
+  // C[i][j] = sum_k A[i][k] * B[k][j]
+  const C = A.map((row, i) =>
+    row.map((_, j) =>
+      A[i].reduce((acc, _v, k) => acc + A[i][k] * B[k][j], 0)
+    )
+  );
+
+  const matA = document.getElementById('mat-a');
+  const matB = document.getElementById('mat-b');
+  const matC = document.getElementById('mat-c');
+  const readout = document.getElementById('step-readout');
+
+  let step = 0; // 0 = nothing filled, 1..9 = filled k cells in row-major order
+
+  function clearHL() {
+    matA.querySelectorAll('td').forEach(td => td.classList.remove('hl-row'));
+    matB.querySelectorAll('td').forEach(td => td.classList.remove('hl-col'));
+    matC.querySelectorAll('td').forEach(td => td.classList.remove('hl-out'));
+  }
+
+  function render() {
+    clearHL();
+    // Re-fill C cells based on current step
+    matC.querySelectorAll('tr').forEach((tr, i) => {
+      tr.querySelectorAll('td').forEach((td, j) => {
+        const idx = i * 3 + j;
+        if (idx < step) td.textContent = C[i][j];
+        else td.textContent = '·';
+      });
+    });
+    if (step === 0) {
+      readout.textContent = 'Step 0: empty result.';
+      return;
+    }
+    const idx = step - 1;
+    const i = Math.floor(idx / 3);
+    const j = idx % 3;
+    // Highlight row i of A
+    matA.querySelectorAll('tr')[i].querySelectorAll('td').forEach(td => td.classList.add('hl-row'));
+    // Highlight column j of B
+    matB.querySelectorAll('tr').forEach(tr => tr.querySelectorAll('td')[j].classList.add('hl-col'));
+    // Highlight C[i][j]
+    matC.querySelectorAll('tr')[i].querySelectorAll('td')[j].classList.add('hl-out');
+    // Readout
+    const terms = [0,1,2].map(k => `${A[i][k]}·${B[k][j]}`).join(' + ');
+    const val = C[i][j];
+    readout.innerHTML = `C[${i}][${j}] = ${terms} = <strong>${val}</strong>`;
+  }
+
+  document.getElementById('next-btn').addEventListener('click', () => {
+    if (step < 9) { step++; render(); }
+  });
+  document.getElementById('prev-btn').addEventListener('click', () => {
+    if (step > 0) { step--; render(); }
+  });
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    step = 0; render();
+  });
+
+  render();
+})();
+</script>
+
+<h2>Matrices <em>are</em> transformations</h2>
+
+<p>The recipe for multiplication looks arbitrary, but it isn't. To see why, you have to understand what matrices are <em>for</em>: a matrix is a way to encode a function — a transformation — that takes a vector and gives back another vector.</p>
+
+<p>"Rotate by 30°" is a transformation. "Scale by 2" is a transformation. "Skew along the x-axis" is a transformation. Each one can be packaged into a matrix, and then applied to a vector by multiplication:</p>
+
+<pre>output_vector = M × input_vector</pre>
+
+<p>The whole multiplication recipe — including the "dot product of a row with a column" rule — is <em>designed</em> to make this work. It's not the recipe deciding what matrices can do; it's matrices' role as transformations dictating what the recipe must be.</p>
+
+<h3>Linear transformations specifically</h3>
+
+<p>Matrices encode a specific kind of transformation, called <strong>linear</strong>. A transformation T is linear when it satisfies two properties:</p>
+
+<pre>T(v + w) = T(v) + T(w)        (distributes over addition)
+T(α · v) = α · T(v)           (scales with scalar multiplication)</pre>
+
+<p>In plain English: "transforming a sum is the same as summing the transforms" and "doubling the input doubles the output." Geometrically, linear transformations <strong>preserve the origin</strong>, <strong>keep straight lines straight</strong>, and <strong>keep parallel lines parallel</strong>. They can rotate, scale, shear, reflect, project — but they cannot translate (translation moves the origin, which breaks linearity).</p>
+
+<p>This restriction sounds limiting until you realize the consequence: <span class="key">a linear transformation is completely determined by where it sends the basis vectors</span>. If you know where <strong>x̂</strong> lands and where <strong>ŷ</strong> lands, you know where every other point lands — by linearity:</p>
+
+<pre>v = v.x · x̂ + v.y · ŷ
+T(v) = T(v.x · x̂ + v.y · ŷ) = v.x · T(x̂) + v.y · T(ŷ)</pre>
+
+<p>The transformed point is just a weighted sum of "where x̂ went" and "where ŷ went," with the weights being the original coordinates of <strong>v</strong>. This is the fundamental insight matrices encode.</p>
+
+<h3>The columns are where the basis vectors land</h3>
+
+<p>Given that a linear transformation is fully described by the destinations of the basis vectors, a matrix simply stores those destinations as its columns:</p>
+
+<pre>M = [ x̂ went to here │ ŷ went to here │ ẑ went to here ]
+      ↑                ↑                ↑
+      column 0         column 1         column 2</pre>
+
+<p>So when you see a 2D matrix:</p>
+
+<pre>┌ 2  -1 ┐
+└ 0   3 ┘</pre>
+
+<p>...you can read it directly as: "x̂ ends up at <span class="mono">(2, 0)</span>, ŷ ends up at <span class="mono">(-1, 3)</span>." The transformation has been completely described by those four numbers.</p>
+
+<h3>Interactive: drag where the axes go</h3>
+
+<p>Below: drag the red arrow (where <strong>x̂</strong> lands) and the blue arrow (where <strong>ŷ</strong> lands). The shaded shape ("F") in faded outline is the original; the filled F is the transformed version. The matrix below updates live.</p>
+
+<figure>
+  <svg id="linear-demo" width="560" height="400" viewBox="0 0 560 400" style="background: #fafafa; border: 1px solid #ddd; cursor: crosshair;">
+    <defs>
+      <marker id="lm-arr-x" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#c44"/>
+      </marker>
+      <marker id="lm-arr-y" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#246"/>
+      </marker>
+    </defs>
+
+    <!-- background grid -->
+    <g id="grid-bg" stroke="#e7e7e7" stroke-width="1"></g>
+
+    <!-- axes -->
+    <line x1="0" y1="200" x2="560" y2="200" stroke="#ccc" stroke-width="1"/>
+    <line x1="280" y1="0" x2="280" y2="400" stroke="#ccc" stroke-width="1"/>
+
+    <!-- original F (faded) -->
+    <polygon id="orig-f" fill="#fde3b0" stroke="#c97" stroke-width="1" opacity="0.35"/>
+
+    <!-- transformed F -->
+    <polygon id="xform-f" fill="#c8f0c8" stroke="#080" stroke-width="1.5" opacity="0.85"/>
+
+    <!-- transformed basis vectors -->
+    <line id="vec-i" x1="280" y1="200" x2="0" y2="0" stroke="#c44" stroke-width="3" marker-end="url(#lm-arr-x)"/>
+    <line id="vec-j" x1="280" y1="200" x2="0" y2="0" stroke="#246" stroke-width="3" marker-end="url(#lm-arr-y)"/>
+
+    <!-- handles -->
+    <circle id="handle-i" r="9" fill="#c44" opacity="0.45" style="cursor: grab;"/>
+    <circle id="handle-j" r="9" fill="#246" opacity="0.45" style="cursor: grab;"/>
+
+    <!-- readout -->
+    <g font-family="SF Mono, monospace" font-size="13" fill="#333">
+      <text x="10" y="20">M = [ i.x  j.x ]   = [ <tspan id="mx00">?</tspan>  <tspan id="mx10">?</tspan> ]</text>
+      <text x="10" y="40">    [ i.y  j.y ]     [ <tspan id="mx01">?</tspan>  <tspan id="mx11">?</tspan> ]</text>
+    </g>
+  </svg>
+  <div style="margin-top: 0.5rem;">
+    <button class="demo-button" data-preset="identity">Identity</button>
+    <button class="demo-button" data-preset="rotate">Rotate 45°</button>
+    <button class="demo-button" data-preset="scale">Scale 1.5×</button>
+    <button class="demo-button" data-preset="shear">Shear</button>
+    <button class="demo-button" data-preset="reflect">Reflect (y-axis)</button>
+    <button class="demo-button" data-preset="squish">Singular (collapse to a line)</button>
+  </div>
+  <figcaption>Read the matrix as "columns are basis destinations." Column 0 = where x̂ went = the red vector. Column 1 = where ŷ went = the blue vector.</figcaption>
+</figure>
+
+<script>
+(() => {
+  const svg = document.getElementById('linear-demo');
+  const handleI = document.getElementById('handle-i');
+  const handleJ = document.getElementById('handle-j');
+  const vecI = document.getElementById('vec-i');
+  const vecJ = document.getElementById('vec-j');
+  const origF = document.getElementById('orig-f');
+  const xformF = document.getElementById('xform-f');
+  const m00 = document.getElementById('mx00');
+  const m10 = document.getElementById('mx10');
+  const m01 = document.getElementById('mx01');
+  const m11 = document.getElementById('mx11');
+  const gridBg = document.getElementById('grid-bg');
+
+  // SVG origin in pixel coords; 1 world unit = SCALE pixels.
+  const ox = 280, oy = 200;
+  const SCALE = 60;
+
+  // Build a faint world-unit grid (-4..+4 in x, -3..+3 in y).
+  for (let gx = -4; gx <= 4; gx++) {
+    const px = ox + gx * SCALE;
+    gridBg.insertAdjacentHTML('beforeend', `<line x1="${px}" y1="0" x2="${px}" y2="400"/>`);
+  }
+  for (let gy = -3; gy <= 3; gy++) {
+    const py = oy - gy * SCALE;
+    gridBg.insertAdjacentHTML('beforeend', `<line x1="0" y1="${py}" x2="560" y2="${py}"/>`);
+  }
+
+  // Convert world -> screen pixel.
+  const sx = (x) => ox + x * SCALE;
+  const sy = (y) => oy - y * SCALE; // flip y so up is +
+
+  // An "F" shape, defined in world units. Stays in the first quadrant.
+  const F = [
+    [0, 0], [0, 2], [1.5, 2], [1.5, 1.55], [0.4, 1.55],
+    [0.4, 1.1], [1, 1.1], [1, 0.7], [0.4, 0.7], [0.4, 0],
+  ];
+
+  // i and j are the world-space destinations of x̂ and ŷ.
+  let ix = 1, iy = 0;   // default: identity
+  let jx = 0, jy = 1;
+
+  function apply(p) {
+    // Linear transform: result = p.x * i + p.y * j
+    return [p[0] * ix + p[1] * jx, p[0] * iy + p[1] * jy];
+  }
+
+  function pointsAttr(pts) {
+    return pts.map(([x, y]) => `${sx(x)},${sy(y)}`).join(' ');
+  }
+
+  function render() {
+    origF.setAttribute('points', pointsAttr(F));
+    xformF.setAttribute('points', pointsAttr(F.map(apply)));
+
+    vecI.setAttribute('x2', sx(ix));
+    vecI.setAttribute('y2', sy(iy));
+    vecJ.setAttribute('x2', sx(jx));
+    vecJ.setAttribute('y2', sy(jy));
+
+    handleI.setAttribute('cx', sx(ix));
+    handleI.setAttribute('cy', sy(iy));
+    handleJ.setAttribute('cx', sx(jx));
+    handleJ.setAttribute('cy', sy(jy));
+
+    m00.textContent = ix.toFixed(2);
+    m01.textContent = iy.toFixed(2);
+    m10.textContent = jx.toFixed(2);
+    m11.textContent = jy.toFixed(2);
+  }
+
+  let dragging = null;
+  function start(handle, key) {
+    handle.addEventListener('pointerdown', (e) => {
+      dragging = key;
+      handle.setPointerCapture(e.pointerId);
+      handle.style.cursor = 'grabbing';
+    });
+    handle.addEventListener('pointerup', (e) => {
+      dragging = null;
+      handle.releasePointerCapture(e.pointerId);
+      handle.style.cursor = 'grab';
+    });
+  }
+  start(handleI, 'i');
+  start(handleJ, 'j');
+
+  svg.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+    const wx = (loc.x - ox) / SCALE;
+    const wy = (oy - loc.y) / SCALE;
+    if (dragging === 'i') { ix = wx; iy = wy; }
+    else { jx = wx; jy = wy; }
+    render();
+  });
+
+  // Presets
+  document.querySelectorAll('[data-preset]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const p = btn.dataset.preset;
+      if (p === 'identity') { ix = 1; iy = 0; jx = 0; jy = 1; }
+      else if (p === 'rotate') {
+        const a = Math.PI / 4;
+        ix = Math.cos(a); iy = Math.sin(a); jx = -Math.sin(a); jy = Math.cos(a);
+      }
+      else if (p === 'scale') { ix = 1.5; iy = 0; jx = 0; jy = 1.5; }
+      else if (p === 'shear') { ix = 1; iy = 0; jx = 0.7; jy = 1; }
+      else if (p === 'reflect') { ix = -1; iy = 0; jx = 0; jy = 1; }
+      else if (p === 'squish') { ix = 1; iy = 0.5; jx = 2; jy = 1; }
+      render();
+    });
+  });
+
+  render();
+})();
+</script>
+
+<p>A few things to notice while you play with it:</p>
+
+<ul>
+  <li><strong>Identity</strong> — the matrix where i = (1, 0) and j = (0, 1) does nothing. The F stays put. This is the "<span class="mono">no transformation</span>" matrix.</li>
+  <li><strong>Rotate</strong> — both basis vectors swing together; the F rotates rigidly. The rotation matrix's columns are exactly <span class="mono">(cos θ, sin θ)</span> and <span class="mono">(-sin θ, cos θ)</span> — i.e. where x̂ and ŷ land after rotating.</li>
+  <li><strong>Singular (collapse to a line)</strong> — if i and j happen to point in the same direction (i.e. they're parallel), the entire 2D plane gets squashed onto a single line. The F flattens. The matrix is <em>singular</em> — information has been lost and you cannot invert it.</li>
+  <li><strong>Reflect</strong> — if you make i = (-1, 0), the F flips horizontally. Negative basis-vector destinations flip orientation.</li>
+</ul>
+
+<h2>Applying = computing the weighted sum</h2>
+
+<p>The matrix tells us where the basis vectors went. Applying it to an arbitrary vector <strong>v = (v.x, v.y)</strong> is then mechanical:</p>
+
+<pre>T(v) = v.x · i + v.y · j
+     = v.x · (column 0) + v.y · (column 1)</pre>
+
+<p>Written out in components, with column 0 = <span class="mono">(i.x, i.y)</span> and column 1 = <span class="mono">(j.x, j.y)</span>:</p>
+
+<pre>T(v).x = v.x · i.x + v.y · j.x
+T(v).y = v.x · i.y + v.y · j.y</pre>
+
+<p>Or, in matrix form:</p>
+
+<pre>┌ T(v).x ┐   ┌ i.x  j.x ┐ ┌ v.x ┐
+└ T(v).y ┘ = └ i.y  j.y ┘ └ v.y ┘</pre>
+
+<p>Each output entry is a row of M dot-producted with v. <strong>The "dot row with vector" recipe is the linear-combination formula written sideways.</strong> Not arbitrary — exactly the arithmetic that "weighted sum of basis destinations" requires.</p>
+
+<h2>Multiplying matrices = composing transformations</h2>
+
+<p>So far we've talked about applying a transformation to a vector: <span class="mono">output = M × v</span>. What if we want to apply two transformations in sequence? Rotate, then scale?</p>
+
+<p>If <strong>A</strong> is the scale matrix and <strong>B</strong> is the rotation matrix, applying B first and then A to a vector v looks like:</p>
+
+<pre>step 1: u = B × v       (rotate)
+step 2: w = A × u       (then scale)
+
+combined: w = A × (B × v)</pre>
+
+<p>Matrix multiplication is defined so that this is the same as multiplying B and A together first into a single combined matrix:</p>
+
+<pre>w = (A × B) × v</pre>
+
+<p>That is the entire reason matrix multiplication exists, and the entire reason its recipe is "rows dot columns." The recipe is whatever it needs to be so that composing transformations into a single matrix gives a matrix that, when applied to a vector, produces the same result as applying the two original transformations in sequence.</p>
+
+<h3>Why the recipe is exactly "rows dot columns"</h3>
+
+<p>Here's the derivation in one direction. The matrix <strong>A × B</strong> represents "apply B, then A." Its columns must be the destinations of the basis vectors under that combined transformation:</p>
+
+<pre>column 0 of (A × B) = A × (B × x̂)
+column 1 of (A × B) = A × (B × ŷ)
+...</pre>
+
+<p>But <strong>B × x̂</strong> is just column 0 of B. So column 0 of <strong>A × B</strong> is <em>A applied to column 0 of B</em>. And applying A to a vector is "weighted sum of A's columns with weights from the vector's components" — i.e., each entry of the result is a dot product of a row of A with that column of B. <span class="key">That's the recipe.</span></p>
+
+<p>You don't have to memorize "rows times columns." You have to remember "columns of the product are A applied to the columns of B" — and the rows-times-columns formula falls out automatically.</p>
+
+<h3>This is why order matters</h3>
+
+<p>"Rotate then scale" and "scale then rotate" give different results when the rotation and scale aren't uniform. Try it: rotate a tall rectangle 45°, then scale x by 2 — you get a parallelogram. Scale x by 2 first, then rotate 45° — you get a different parallelogram. The matrices A × B and B × A are different matrices because the transformations they represent are different sequences.</p>
+
+<p>Matrix multiplication is non-commutative because <strong>composing transformations is order-sensitive</strong>. The algebra simply reflects the geometry.</p>
+
+<h2>Critical properties</h2>
+
+<h3>Associative — yes</h3>
+
+<pre>(A × B) × C  =  A × (B × C)</pre>
+
+<p>You can group multiplications however you like. This is why <span class="mono">mvp = projection × view × model</span> can be computed as <span class="mono">(projection × view) × model</span> or <span class="mono">projection × (view × model)</span> — both produce the same result, but the first one lets you compute <span class="mono">projection × view</span> once and reuse it for every model.</p>
+
+<h3>NOT commutative</h3>
+
+<pre>A × B  ≠  B × A  (in general)</pre>
+
+<p>Order matters. This is the single most important fact about matrix multiplication. Translating then rotating gives a completely different result from rotating then translating — and the matrices reflect that.</p>
+
+<p>Try it: rotate a vector 90° then translate it by (5, 0), versus translate then rotate. You end up in different places.</p>
+
+<h3>Identity exists</h3>
+
+<pre>I × A = A × I = A</pre>
+
+<p>There's a special matrix <strong>I</strong> (the identity matrix — 1s on the diagonal, 0s elsewhere) that acts like the number 1: multiplying by it leaves the other matrix unchanged. It represents the "do nothing" transformation.</p>
+
+<h2>The right-to-left reading order</h2>
+
+<p>When you see <span class="mono">M × v</span>, the matrix is on the <em>left</em>. When you compose transformations, you read the multiplication chain <em>right to left</em>:</p>
+
+<pre>final = projection × view × model × vec4(localPos, 1.0)</pre>
+
+<p>The point starts in local object space (the rightmost thing). It first gets multiplied by <strong>model</strong>, moving into world space. Then <strong>view</strong>, moving into camera space. Then <strong>projection</strong>, into clip space. <span class="key">The matrix nearest to the vector acts first.</span></p>
+
+<p>This is just a convention — but it's the convention used by every graphics API (GLSL, HLSL, math libraries), so you might as well internalize it.</p>
+
+<h2>How your <code>multiply</code> implements the recipe</h2>
+
+<p>Here's your <span class="mono">mat4.ts</span> multiply, annotated:</p>
+
+<pre>export function multiply(out: Mat4, a: Mat4, b: Mat4): Mat4 {
+  const res = new Array&lt;number&gt;(16);
+  for (let row = 0; row &lt; 4; row++) {           // for each output row
+    for (let col = 0; col &lt; 4; col++) {         // for each output column
+      let sum = 0;
+      for (let k = 0; k &lt; 4; k++) {              // dot product of row of a with col of b
+        sum += a[k * 4 + row] * b[col * 4 + k];
+      }
+      res[col * 4 + row] = sum;                  // write into result
+    }
+  }
+  for (let i = 0; i &lt; 16; i++) out[i] = res[i];  // copy temp to out (aliasing safety)
+  return out;
+}</pre>
+
+<p>The inner loop is the dot product. The two outer loops walk every (row, col) cell of the output. The strange-looking indexing <span class="mono">k * 4 + row</span> versus <span class="mono">col * 4 + k</span> is column-major arithmetic: to walk down a column you step by 1, to walk across a row you step by 4.</p>
+
+<h2>One last picture</h2>
+
+<p>A useful mental model: think of a matrix as a stack of column vectors. <strong>A × v</strong> is then "a weighted sum of A's columns, where the weights come from v":</p>
+
+<pre>A × (v.x, v.y, v.z, v.w)  =  v.x · col0  +  v.y · col1  +  v.z · col2  +  v.w · col3</pre>
+
+<p>This is the same recipe written differently. It's especially useful for understanding what a matrix does: <strong>A's columns are where the basis vectors go after the transformation</strong>. The first column is "where the x-axis lands"; the second column is "where the y-axis lands"; and so on.</p>
+
+<p>So when you build a rotation matrix and the second column is <span class="mono">(0, cos(θ), sin(θ), 0)</span>, that's literally telling you: "after this transformation, the y-axis ends up at that location." Designing matrices becomes much easier once you think of columns as <em>destinations of basis vectors</em>.</p>
+
+</body>
+</html>

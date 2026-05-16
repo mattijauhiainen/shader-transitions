@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>The Dot Product — Geometric Intuition</title>
+<style>
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    max-width: 760px;
+    margin: 2rem auto;
+    padding: 0 1.25rem;
+    line-height: 1.6;
+    color: #222;
+    background: #fdfdfa;
+  }
+  h1, h2, h3 { font-family: "Helvetica Neue", Arial, sans-serif; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: .3rem; }
+  h2 { margin-top: 2.4rem; border-bottom: 1px solid #ccc; padding-bottom: .2rem; }
+  code, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.95em; }
+  pre {
+    background: #f3f1ea;
+    padding: .8rem 1rem;
+    overflow-x: auto;
+    border-left: 3px solid #888;
+  }
+  figure { margin: 1.5rem auto; text-align: center; }
+  figcaption {
+    font-size: 0.9em; color: #555; margin-top: .4rem; font-style: italic;
+  }
+  svg { max-width: 100%; height: auto; }
+  .key { background: #fff7d6; padding: .1em .35em; border-radius: 3px; }
+  table.cases { border-collapse: collapse; margin: 1rem 0; }
+  table.cases td, table.cases th {
+    border: 1px solid #aaa;
+    padding: .4rem .7rem;
+    text-align: left;
+  }
+  .controls { margin: 0.5rem 0; display: flex; gap: 1rem; align-items: center; }
+  .controls label { font-size: 0.9em; }
+  .readout { font-family: "SF Mono", Menlo, Consolas, monospace; }
+</style>
+</head>
+<body>
+
+<h1>The Dot Product</h1>
+
+<p>The dot product takes two vectors and returns a single number. Despite being just a number, that number captures something deeply geometric: <em>how much one vector points in the direction of another</em>.</p>
+
+<h2>The two definitions</h2>
+
+<p>There are two formulas for the dot product. They look totally different. They give exactly the same answer. This is not a coincidence — it's the entire reason the dot product is useful.</p>
+
+<p><strong>Algebraic:</strong> multiply matching components, add them up.</p>
+
+<pre>a · b = a.x * b.x + a.y * b.y + a.z * b.z</pre>
+
+<p><strong>Geometric:</strong> the product of the two vectors' lengths, times the cosine of the angle between them.</p>
+
+<pre>a · b = |a| |b| cos(θ)</pre>
+
+<p>The first form is what you compute. The second form is what it <em>means</em>.</p>
+
+<h2>Why both formulas are the same</h2>
+
+<p>If you take the unit basis vectors <span class="mono">x̂ = (1, 0, 0)</span>, <span class="mono">ŷ = (0, 1, 0)</span>, <span class="mono">ẑ = (0, 0, 1)</span>, you can verify that <span class="mono">x̂ · x̂ = 1</span> (same direction, angle 0, cos(0) = 1) and <span class="mono">x̂ · ŷ = 0</span> (perpendicular, angle 90°, cos(90°) = 0). Both definitions agree on these cases. From there, the bilinearity of the operation propagates the agreement to all other vectors. We won't derive the equivalence here — just trust that it holds, and use whichever form is convenient.</p>
+
+<h2>What the sign tells you</h2>
+
+<p>Because <span class="mono">|a|</span> and <span class="mono">|b|</span> are always positive (they're lengths), the sign of <span class="mono">a · b</span> is determined entirely by <span class="mono">cos(θ)</span>:</p>
+
+<table class="cases">
+  <tr><th>Angle θ</th><th>cos(θ)</th><th>a · b</th><th>Interpretation</th></tr>
+  <tr><td>0°</td><td>1</td><td>maximum positive</td><td>same direction</td></tr>
+  <tr><td>between 0° and 90°</td><td>positive</td><td>positive</td><td>somewhat same direction</td></tr>
+  <tr><td>90°</td><td>0</td><td><strong>zero</strong></td><td>perpendicular</td></tr>
+  <tr><td>between 90° and 180°</td><td>negative</td><td>negative</td><td>somewhat opposite direction</td></tr>
+  <tr><td>180°</td><td>-1</td><td>maximum negative</td><td>opposite direction</td></tr>
+</table>
+
+<p>This is the dot product's superpower: <span class="key">a single arithmetic check tells you whether two vectors face the same way, opposite ways, or are perpendicular</span>.</p>
+
+<h2>Interactive: drag the second vector</h2>
+
+<p>Two vectors, both starting at the origin. <strong>a</strong> is fixed pointing right; you can drag the tip of <strong>b</strong>. Watch how the dot product changes with the angle.</p>
+
+<figure>
+  <svg id="dot-demo" width="600" height="400" viewBox="0 0 600 400" style="background: #fafafa; border: 1px solid #ddd; cursor: crosshair;">
+    <defs>
+      <marker id="arr-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#c44"/>
+      </marker>
+      <marker id="arr-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#246"/>
+      </marker>
+      <marker id="arr-proj" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#888"/>
+      </marker>
+    </defs>
+
+    <!-- axes -->
+    <line x1="0" y1="200" x2="600" y2="200" stroke="#ccc" stroke-width="1"/>
+    <line x1="300" y1="0" x2="300" y2="400" stroke="#ccc" stroke-width="1"/>
+
+    <!-- projection of b onto a (shown as dashed line + filled segment on a) -->
+    <line id="proj-segment" x1="300" y1="200" x2="0" y2="200" stroke="#999" stroke-width="6" opacity="0.4"/>
+    <line id="proj-drop" x1="0" y1="0" x2="0" y2="0" stroke="#888" stroke-width="1" stroke-dasharray="4 3"/>
+
+    <!-- vector a (fixed) -->
+    <line x1="300" y1="200" x2="500" y2="200" stroke="#c44" stroke-width="3" marker-end="url(#arr-a)"/>
+    <text x="510" y="195" font-family="SF Mono, monospace" font-size="14" fill="#c44">a</text>
+
+    <!-- vector b (draggable) -->
+    <line id="vec-b" x1="300" y1="200" x2="430" y2="110" stroke="#246" stroke-width="3" marker-end="url(#arr-b)"/>
+    <circle id="handle" cx="430" cy="110" r="8" fill="#246" opacity="0.4" style="cursor: grab;"/>
+    <text id="b-label" x="438" y="105" font-family="SF Mono, monospace" font-size="14" fill="#246">b</text>
+
+    <!-- readout -->
+    <g font-family="SF Mono, monospace" font-size="13" fill="#333">
+      <text x="10" y="20">a = (1, 0)</text>
+      <text x="10" y="40" id="readout-b">b = ?</text>
+      <text x="10" y="60" id="readout-angle">θ = ?</text>
+      <text x="10" y="80" id="readout-dot" font-weight="bold">a · b = ?</text>
+    </g>
+  </svg>
+  <figcaption>The grey bar along <strong>a</strong> shows the projection of <strong>b</strong> onto <strong>a</strong>. The signed length of that bar (positive going right, negative going left) is the dot product, scaled by the length of <strong>a</strong>.</figcaption>
+</figure>
+
+<script>
+(() => {
+  const svg = document.getElementById('dot-demo');
+  const handle = document.getElementById('handle');
+  const vecB = document.getElementById('vec-b');
+  const bLabel = document.getElementById('b-label');
+  const projSeg = document.getElementById('proj-segment');
+  const projDrop = document.getElementById('proj-drop');
+  const readoutB = document.getElementById('readout-b');
+  const readoutAngle = document.getElementById('readout-angle');
+  const readoutDot = document.getElementById('readout-dot');
+
+  // Origin at (300, 200). +x screen-right, +y screen-up (so we negate screen-y).
+  const ox = 300, oy = 200;
+  const aLenWorld = 1.0;          // a is unit length conceptually
+  const aLenScreen = 200;         // and we draw it 200px long
+  // b is drawn with this same screen scale.
+
+  let bx = 130, by = -90; // screen-pixel offset (note: y negated below)
+
+  function update() {
+    // Convert b's screen offset into "world" coords with up = +y.
+    const bxWorld = bx / aLenScreen;
+    const byWorld = -by / aLenScreen; // flip screen-y to math-y
+    const bLen = Math.hypot(bxWorld, byWorld);
+    const angle = Math.atan2(byWorld, bxWorld); // in radians
+    const dot = bxWorld; // since a = (1, 0), a · b = b.x
+
+    vecB.setAttribute('x2', ox + bx);
+    vecB.setAttribute('y2', oy + by);
+    handle.setAttribute('cx', ox + bx);
+    handle.setAttribute('cy', oy + by);
+    bLabel.setAttribute('x', ox + bx + 8);
+    bLabel.setAttribute('y', oy + by - 4);
+
+    // Projection of b onto a: in world coords, that's just (b.x, 0), since a is the +x axis.
+    // On screen, that means a horizontal bar from origin to (ox + bx, oy).
+    projSeg.setAttribute('x2', ox + bx);
+    projSeg.setAttribute('y2', oy);
+    // Drop a perpendicular from b's tip down to the projection.
+    projDrop.setAttribute('x1', ox + bx);
+    projDrop.setAttribute('y1', oy + by);
+    projDrop.setAttribute('x2', ox + bx);
+    projDrop.setAttribute('y2', oy);
+
+    readoutB.textContent = `b = (${bxWorld.toFixed(2)}, ${byWorld.toFixed(2)})`;
+    readoutAngle.textContent = `θ = ${(angle * 180 / Math.PI).toFixed(1)}°`;
+    readoutDot.textContent = `a · b = ${dot.toFixed(3)}`;
+    readoutDot.setAttribute('fill', dot > 0.01 ? '#080' : dot < -0.01 ? '#a40' : '#333');
+  }
+
+  let dragging = false;
+  handle.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    handle.setPointerCapture(e.pointerId);
+    handle.style.cursor = 'grabbing';
+  });
+  handle.addEventListener('pointerup', (e) => {
+    dragging = false;
+    handle.releasePointerCapture(e.pointerId);
+    handle.style.cursor = 'grab';
+  });
+  svg.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+    bx = loc.x - ox;
+    by = loc.y - oy;
+    update();
+  });
+
+  update();
+})();
+</script>
+
+<h2>The projection picture</h2>
+
+<p>The geometric formula <span class="mono">|a| |b| cos(θ)</span> describes the length of <strong>b</strong>'s shadow when light shines perpendicular to <strong>a</strong>, multiplied by the length of <strong>a</strong>. If <strong>a</strong> is a unit vector (length 1), then <span class="mono">a · b</span> is exactly the length of <strong>b</strong>'s shadow onto the line of <strong>a</strong>.</p>
+
+<p>This is why "projecting onto an axis" in graphics code is just a dot product. If <strong>x̂</strong> is the world's x-axis (a unit vector), then <span class="mono">point · x̂</span> is the point's x-coordinate. If <strong>uCamForward</strong> is the camera's forward direction (also a unit vector), then <span class="mono">(point - uCamPos) · uCamForward</span> is the point's <em>depth</em> in front of the camera.</p>
+
+<h2>Where this lives in the halftones project</h2>
+
+<p>Dot products are everywhere in your codebase. A few examples:</p>
+
+<h3>Luma — converting RGB to a single brightness</h3>
+
+<pre>float lumaValue = dot(color.rgb, uLUMA);</pre>
+
+<p>Here <span class="mono">uLUMA</span> is a constant vector of weights, conventionally something like <span class="mono">(0.299, 0.587, 0.114)</span>. The dot product collapses three color channels into one number by weighted sum. This is the same operation as the algebraic definition above — no angle involved, just "multiply matching components and add."</p>
+
+<h3>Lambertian lighting — how brightly a surface is lit</h3>
+
+<pre>float diffuse = max(dot(normal, lightDir), 0.0);</pre>
+
+<p>Both <span class="mono">normal</span> and <span class="mono">lightDir</span> are unit vectors. The dot product is <span class="mono">cos(θ)</span> where θ is the angle between the surface and the light. When the light hits the surface head-on, <span class="mono">cos(0) = 1</span> — full brightness. As the angle widens, brightness drops to zero. Past 90°, the surface faces away from the light and we clamp to 0 with <span class="mono">max</span>.</p>
+
+<h3>Depth in front of a camera (orbit transition)</h3>
+
+<pre>float depth = dot(toPoint, uCamForward);</pre>
+
+<p><span class="mono">toPoint</span> is the vector from camera to a world point. <span class="mono">uCamForward</span> is the camera's unit forward axis. The dot product is the length of <span class="mono">toPoint</span>'s shadow onto <span class="mono">uCamForward</span> — exactly the depth. A positive result means in front of the camera, negative means behind.</p>
+
+<h2>One trick worth remembering</h2>
+
+<p>If <strong>a</strong> and <strong>b</strong> are both unit vectors, then <span class="mono">a · b = cos(θ)</span> directly, with no length factors to worry about. This means <strong>the dot product of two unit vectors is the cosine of the angle between them</strong>. You'll see this used constantly to <em>avoid</em> ever computing an explicit angle — comparing dot products is much cheaper than calling <span class="mono">acos</span>.</p>
+
+<p>Want to test if vector <strong>v</strong> is within 30° of direction <strong>d</strong>? Don't compute the angle — just check <span class="mono">dot(v, d) > cos(30°)</span>, where the right-hand side is a precomputed constant. Same answer, no trigonometry at runtime.</p>
+
+</body>
+</html>

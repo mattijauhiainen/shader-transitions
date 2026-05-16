@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Orbit dot rims — matching the halftone at handoff, and not making dark halos mid-flight</title>
+<style>
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    max-width: 820px;
+    margin: 2rem auto;
+    padding: 0 1.25rem;
+    line-height: 1.6;
+    color: #222;
+    background: #fdfdfa;
+  }
+  h1, h2, h3 { font-family: "Helvetica Neue", Arial, sans-serif; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: .3rem; }
+  h2 { margin-top: 2.4rem; border-bottom: 1px solid #ccc; padding-bottom: .2rem; }
+  h3 { margin-top: 1.6rem; }
+  code, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.95em; }
+  pre {
+    background: #f3f1ea;
+    padding: .8rem 1rem;
+    overflow-x: auto;
+    border-left: 3px solid #888;
+  }
+  figure { margin: 1.5rem auto; text-align: center; }
+  figcaption {
+    font-size: 0.9em; color: #555; margin-top: .4rem; font-style: italic;
+  }
+  svg { max-width: 100%; height: auto; }
+  .key { background: #fff7d6; padding: .1em .35em; border-radius: 3px; }
+  .bad { color: #b33; }
+  .good { color: #2a6; }
+  aside.note {
+    background: #eef4fb;
+    border-left: 3px solid #6a9ad0;
+    padding: .7rem 1rem;
+    margin: 1.2rem 0;
+    font-size: 0.95em;
+  }
+</style>
+</head>
+<body>
+
+<h1>Orbit dot rims</h1>
+
+<p>The orbit transition flies a camera around the dot grid and shows it from many angles, then drops the camera back into the same flat pose every other transition uses. Two problems show up at the dot's edges: one at <em>handoff</em> (the moment orbit ends and the next transition takes over), and one <em>mid-flight</em> (the dots get noisy halos when the camera is at an angle). This is what the problems are and how we fixed them.</p>
+
+<h2>The setup</h2>
+
+<p>A dot is a circle of radius <span class="mono">r</span> pixels, where <span class="mono">r</span> comes from the cell's luminance. The resting halftone (and every 2D transition like <span class="mono">wipe</span>) draws it with a 1-pixel-wide anti-aliased rim:</p>
+
+<pre>alpha = smoothstep(r + 0.5, r - 0.5, dist_from_center_in_pixels)</pre>
+
+<p>Inside the dot, <span class="mono">alpha = 1</span>. Outside, <span class="mono">alpha = 0</span>. Right at the edge, <span class="mono">alpha = 0.5</span>. The 1-pixel feather is what makes circles not look like staircases on a square pixel grid.</p>
+
+<figure>
+  <svg width="540" height="180" viewBox="0 0 540 180" style="background: #fafafa; border: 1px solid #ddd;">
+    <!-- big dot with soft rim -->
+    <defs>
+      <radialGradient id="softdot" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#222" stop-opacity="1"/>
+        <stop offset="85%" stop-color="#222" stop-opacity="1"/>
+        <stop offset="100%" stop-color="#222" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <circle cx="140" cy="90" r="56" fill="url(#softdot)"/>
+    <text x="140" y="170" text-anchor="middle" font-size="13" fill="#555" font-style="italic">a halftone dot, soft 1-px rim</text>
+
+    <!-- alpha profile -->
+    <g transform="translate(290,30)">
+      <line x1="0" y1="100" x2="220" y2="100" stroke="#888"/>
+      <line x1="0" y1="0" x2="0" y2="110" stroke="#888"/>
+      <path d="M 0 10 L 90 10 L 110 90 L 220 90" fill="none" stroke="#b34" stroke-width="2"/>
+      <text x="-5" y="14" text-anchor="end" font-size="11" fill="#555">α=1</text>
+      <text x="-5" y="94" text-anchor="end" font-size="11" fill="#555">α=0</text>
+      <text x="100" y="120" text-anchor="middle" font-size="11" fill="#555">r</text>
+      <line x1="100" y1="95" x2="100" y2="105" stroke="#888"/>
+      <text x="110" y="148" text-anchor="middle" font-size="12" fill="#555" font-style="italic">distance from dot center →</text>
+    </g>
+  </svg>
+  <figcaption>The dot's edge is anti-aliased over a 1-pixel band: alpha drops smoothly from 1 to 0 as you cross the radius.</figcaption>
+</figure>
+
+<p>Orbit can't draw the dot the same way, because it's in 3D — the camera moves, dots tilt and foreshorten. Orbit instead draws each dot as a tiny <em>billboard</em> (a quad always facing the camera), and the fragment shader inside that quad recovers the dot's apparent screen radius and runs the same smoothstep.</p>
+
+<h2>Problem 1: the dot edges didn't match at handoff</h2>
+
+<p>At the very last frame of orbit, the camera is dead-on in front of the dot plane — the same view as the resting halftone. The next transition takes over from there. So orbit's last frame and the next transition's first frame should be <em>pixel-identical</em>. They weren't: some dots looked subtly different, especially small ones from dark cells.</p>
+
+<p>The cause was how the anti-aliasing was computed. The old orbit shader used <span class="mono">fwidth()</span> in <em>normalized</em> coordinates inside the billboard (the impostor's <span class="mono">[-1, 1]</span> space) instead of in pixels:</p>
+
+<pre>float r = length(vCorner);              // 0 at center, 1 at dot edge
+float aa = fwidth(r);                    // how fast r changes per pixel
+float alpha = 1 - smoothstep(1 - aa/2, 1 + aa/2, r);</pre>
+
+<p>For a dot whose screen radius is 5 pixels, <span class="mono">fwidth(r)</span> is about <span class="mono">1/5 = 0.2</span> — so the smoothstep spans about 1 pixel of screen space. Fine. But for a dot whose screen radius is half a pixel (a dark, low-luma cell), <span class="mono">fwidth(r)</span> is about 2, and the smoothstep spans the whole dot. The dot turns into a fuzzy blob instead of a tight dot.</p>
+
+<figure>
+  <svg width="640" height="220" viewBox="0 0 640 220" style="background: #fafafa; border: 1px solid #ddd;">
+    <defs>
+      <radialGradient id="sharp" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#222" stop-opacity="1"/>
+        <stop offset="78%" stop-color="#222" stop-opacity="1"/>
+        <stop offset="100%" stop-color="#222" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="blob" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#222" stop-opacity="1"/>
+        <stop offset="0%" stop-color="#222" stop-opacity="0.6"/>
+        <stop offset="100%" stop-color="#222" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+
+    <text x="160" y="30" text-anchor="middle" font-size="13" fill="#333">Big dot (5 px radius)</text>
+    <circle cx="100" cy="110" r="40" fill="url(#sharp)"/>
+    <text x="100" y="180" text-anchor="middle" font-size="12" fill="#555">resting halftone</text>
+    <circle cx="220" cy="110" r="40" fill="url(#sharp)"/>
+    <text x="220" y="180" text-anchor="middle" font-size="12" fill="#555">orbit (fwidth AA)</text>
+    <text x="160" y="205" text-anchor="middle" font-size="12" fill="#2a6">≈ identical ✓</text>
+
+    <text x="480" y="30" text-anchor="middle" font-size="13" fill="#333">Tiny dot (0.5 px radius)</text>
+    <circle cx="420" cy="110" r="4" fill="#222"/>
+    <text x="420" y="180" text-anchor="middle" font-size="12" fill="#555">resting halftone</text>
+    <circle cx="540" cy="110" r="18" fill="url(#blob)"/>
+    <text x="540" y="180" text-anchor="middle" font-size="12" fill="#555">orbit (fwidth AA)</text>
+    <text x="480" y="205" text-anchor="middle" font-size="12" fill="#b33">fuzzy! ✗</text>
+  </svg>
+  <figcaption>fwidth-based AA produces a 1-pixel-feather <em>relative to the dot's own size</em>. For sub-pixel dots, the "1 pixel" is the whole dot — the dot becomes a blur.</figcaption>
+</figure>
+
+<h3>The fix</h3>
+
+<p>Do anti-aliasing in actual pixels, not in impostor coordinates. The vertex shader projects the dot's center, reads <span class="mono">gl_Position.w</span> (which is its depth from the camera), and converts the dot's world radius into a screen pixel radius — call it <span class="mono">vRadiusPx</span>. The fragment shader uses the same smoothstep the resting halftone does:</p>
+
+<pre>float distPx = length(vCorner) * vRadiusPx;
+float alpha = smoothstep(vRadiusPx + 0.5, vRadiusPx - 0.5, distPx);</pre>
+
+<p>Now the feather is always 1 pixel wide, regardless of dot size. Big dots match. Small dots match. Handoff is pixel-identical.</p>
+
+<aside class="note">
+<strong>Subtle detail:</strong> the billboard needs to be slightly bigger than the dot itself, otherwise the AA tail (the part where alpha drops from 0.5 to 0) is cut off at the billboard's edge. We scale the billboard up by half a pixel of headroom. For sub-pixel dots we cap the scale-up at ~12% so the billboard doesn't balloon to absurd sizes — those dots are below one pixel anyway, the cap is invisible.
+</aside>
+
+<h2>Problem 2: noisy halos around the dots mid-flight</h2>
+
+<p>With the handoff fixed, a second problem became visible while the camera was actually moving. The dots had flickering, dark halos around their edges. The halos shifted every frame.</p>
+
+<h3>Why that happens</h3>
+
+<p>3D rendering uses a <strong>depth buffer</strong>: for every pixel on the screen, the GPU remembers how far away the closest thing drawn there is. When a new fragment comes in, the GPU compares its depth against what's in the buffer; if the new fragment is farther, it's thrown away (it'd be behind something already drawn). This is how a closer object correctly hides a farther one.</p>
+
+<p>Mid-flight, dots that are physically far apart in the world get projected close together on screen due to perspective. Two dots can land on overlapping screen pixels — one closer to the camera, one farther. The depth test sorts them out correctly… <em>for the dot centers</em>. But the dot has an AA rim where alpha is partial (0.05, 0.3, 0.5…), and those rim fragments also write into the depth buffer. So:</p>
+
+<ol>
+  <li>The near dot's solid center writes its depth. ✓</li>
+  <li>The near dot's <strong>rim</strong> writes the same depth, even at pixels where alpha is just 0.05.</li>
+  <li>The far dot tries to draw at one of those rim pixels. Its depth fails the test (it's behind). It's thrown away entirely.</li>
+  <li>The screen pixel ends up showing <span class="mono">0.05 × nearColor + 0.95 × black</span> instead of <span class="mono">0.05 × nearColor + 0.95 × farColor</span> — a dark patch.</li>
+</ol>
+
+<figure>
+  <svg width="640" height="260" viewBox="0 0 640 260" style="background: #fafafa; border: 1px solid #ddd;">
+    <!-- near dot -->
+    <defs>
+      <radialGradient id="near" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#2a4a7f" stop-opacity="1"/>
+        <stop offset="78%" stop-color="#2a4a7f" stop-opacity="1"/>
+        <stop offset="100%" stop-color="#2a4a7f" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="far" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#c87432" stop-opacity="1"/>
+        <stop offset="78%" stop-color="#c87432" stop-opacity="1"/>
+        <stop offset="100%" stop-color="#c87432" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="halo-near" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#2a4a7f" stop-opacity="1"/>
+        <stop offset="78%" stop-color="#2a4a7f" stop-opacity="1"/>
+        <stop offset="100%" stop-color="#2a4a7f" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+
+    <!-- left: what you want -->
+    <text x="160" y="28" text-anchor="middle" font-size="14" font-weight="bold" fill="#333">What you want</text>
+    <circle cx="180" cy="140" r="46" fill="url(#far)"/>
+    <circle cx="140" cy="120" r="46" fill="url(#near)"/>
+    <text x="160" y="230" text-anchor="middle" font-size="12" fill="#555">near dot's rim composites over far dot</text>
+
+    <!-- divider -->
+    <line x1="320" y1="50" x2="320" y2="220" stroke="#ccc" stroke-dasharray="4,4"/>
+
+    <!-- right: what depth test does -->
+    <text x="480" y="28" text-anchor="middle" font-size="14" font-weight="bold" fill="#333">What the depth test does</text>
+    <!-- far dot drawn first, then its rim gets erased by near dot's rim -->
+    <circle cx="500" cy="140" r="46" fill="url(#far)"/>
+    <!-- mask: erase the far dot where near dot's rim sits -->
+    <mask id="rimmask">
+      <rect width="640" height="260" fill="white"/>
+      <circle cx="460" cy="120" r="46" fill="black"/>
+    </mask>
+    <g mask="url(#rimmask)">
+      <circle cx="500" cy="140" r="46" fill="#000"/>
+    </g>
+    <circle cx="460" cy="120" r="46" fill="url(#halo-near)"/>
+    <text x="480" y="230" text-anchor="middle" font-size="12" fill="#b33">far dot blocked by rim → dark halo</text>
+  </svg>
+  <figcaption>Two dots that overlap on screen due to perspective. The near (blue) dot's faint rim still writes depth, blocking the far (orange) dot wherever it tried to render. The viewer sees a dark crescent around the near dot.</figcaption>
+</figure>
+
+<p>And because the camera moves every frame, which dot's rim covers which other dot's center shifts constantly — the halos shimmer. That's the "noise" at the edges of the balls.</p>
+
+<h3>The fix: split the draw into two passes</h3>
+
+<p>We want the depth test to do its job for the <em>solid centers</em> (so closer dots properly hide farther ones), but we don't want the AA rims to write into the depth buffer (so they can't block anything). So we render orbit's dot grid <em>twice</em>:</p>
+
+<table style="border-collapse: collapse; width: 100%; margin: 1rem 0;">
+<tr style="background: #eee;">
+  <th style="padding: .5rem; border: 1px solid #aaa; text-align: left;">Pass</th>
+  <th style="padding: .5rem; border: 1px solid #aaa; text-align: left;">Color writes</th>
+  <th style="padding: .5rem; border: 1px solid #aaa; text-align: left;">Depth writes</th>
+  <th style="padding: .5rem; border: 1px solid #aaa; text-align: left;">What renders</th>
+</tr>
+<tr>
+  <td style="padding: .5rem; border: 1px solid #aaa;"><strong>1: depth lay-down</strong></td>
+  <td style="padding: .5rem; border: 1px solid #aaa;">off</td>
+  <td style="padding: .5rem; border: 1px solid #aaa;">on</td>
+  <td style="padding: .5rem; border: 1px solid #aaa;">discard if <span class="mono">alpha &lt; 0.95</span> — only the solid interior of each dot writes depth</td>
+</tr>
+<tr>
+  <td style="padding: .5rem; border: 1px solid #aaa;"><strong>2: color</strong></td>
+  <td style="padding: .5rem; border: 1px solid #aaa;">on</td>
+  <td style="padding: .5rem; border: 1px solid #aaa;">off</td>
+  <td style="padding: .5rem; border: 1px solid #aaa;">discard if <span class="mono">alpha ≈ 0</span> — the full dot, rim included, composited with blending</td>
+</tr>
+</table>
+
+<p>The fragment shader is the same in both passes; only a <span class="mono">uMinAlpha</span> uniform changes between them. After pass 1, the depth buffer remembers each dot's center but nothing about its rim. Pass 2 then:</p>
+
+<ul>
+  <li>Draws a near dot's center → passes depth test → renders.</li>
+  <li>Draws a near dot's rim where there's nothing behind → no depth at that pixel → renders.</li>
+  <li>Draws a near dot's rim where a far dot's center sits behind it → near's depth is closer → passes → composites over the far center. <span class="good">No dark halo.</span></li>
+  <li>Draws a far dot's center where a near dot's center sits in front → fails depth → discarded. <span class="good">Correct occlusion.</span></li>
+</ul>
+
+<aside class="note">
+<strong>One gotcha:</strong> pass 2's own solid-center fragments are at the same depth as what pass 1 wrote — so the default <span class="mono">LESS</span> depth test would reject them (a fragment at depth <span class="mono">z</span> isn't <em>less than</em> a buffer at depth <span class="mono">z</span>). We switch to <span class="mono">LEQUAL</span> for the orbit draw so equal depths survive. The first version of the fix without this switch made every dot's interior render as solid black — pass 1 wrote depth, pass 2's interior failed the test, and only the rim came through.
+</aside>
+
+<h2>Summary</h2>
+
+<p>Two unrelated-looking problems, both at the dots' edges, both with focused fixes:</p>
+
+<ol>
+  <li><strong>Handoff didn't match the resting halftone.</strong> The anti-aliasing was computed in the billboard's normalized space, so it scaled with the dot — fine for big dots, awful for small ones. <em>Fix:</em> pass the dot's screen pixel radius through to the fragment shader and use the same pixel-space smoothstep every 2D transition uses.</li>
+  <li><strong>Mid-flight rims left dark halos.</strong> AA-rim fragments wrote into the depth buffer, blocking dots that should have shown through behind them. <em>Fix:</em> two-pass draw — first pass writes only the solid centers' depth, second pass writes only color and tests against that depth field. Use <span class="mono">LEQUAL</span> so pass 2's own centers survive pass 1's writes.</li>
+</ol>
+
+</body>
+</html>

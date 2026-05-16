@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Rodrigues' Rotation — Spinning a Vector Around Any Axis</title>
+<style>
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    max-width: 760px;
+    margin: 2rem auto;
+    padding: 0 1.25rem;
+    line-height: 1.6;
+    color: #222;
+    background: #fdfdfa;
+  }
+  h1, h2, h3 { font-family: "Helvetica Neue", Arial, sans-serif; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: .3rem; }
+  h2 { margin-top: 2.4rem; border-bottom: 1px solid #ccc; padding-bottom: .2rem; }
+  code, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.95em; }
+  pre {
+    background: #f3f1ea;
+    padding: .8rem 1rem;
+    overflow-x: auto;
+    border-left: 3px solid #888;
+  }
+  figure { margin: 1.5rem auto; text-align: center; }
+  figcaption {
+    font-size: 0.9em; color: #555; margin-top: .4rem; font-style: italic;
+  }
+  svg { max-width: 100%; height: auto; }
+  .key { background: #fff7d6; padding: .1em .35em; border-radius: 3px; }
+  .matrix-readout {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    background: #f3f1ea;
+    padding: .6rem .9rem;
+    border-left: 3px solid #888;
+    margin: 0.8rem 0;
+    display: inline-block;
+    white-space: pre;
+    text-align: left;
+  }
+  input[type="range"] { width: 360px; vertical-align: middle; }
+  .term-par { color: #888; }
+  .term-cos { color: #c44; }
+  .term-sin { color: #073; }
+  .term-axis { color: #246; }
+</style>
+</head>
+<body>
+
+<h1>Rodrigues' Rotation Formula</h1>
+
+<p>The <a href="rotations.html">rotation-matrix explainer</a> built rotations around the three coordinate axes — x, y, and z. But often the axis you want to spin around is none of those: it's some arbitrary unit vector pointing off at an angle. Rodrigues' formula rotates a vector around <em>any</em> axis directly, without first changing coordinate systems.</p>
+
+<p>It looks cryptic when you first meet it:</p>
+
+<pre>v_rot = v cos θ  +  (k × v) sin θ  +  k (k · v)(1 - cos θ)</pre>
+
+<p>...but every piece falls out of one idea: <span class="key">split the vector into the part that moves and the part that doesn't, then rotate only the part that moves.</span> This explainer derives it from that idea, leaning on the <a href="dot-product.html">dot product</a> and <a href="cross-product.html">cross product</a> you've already seen.</p>
+
+<h2>The setup</h2>
+
+<p>We're given:</p>
+<ul>
+  <li>a <strong>unit axis</strong> <span class="mono">k</span> (length 1) to rotate around,</li>
+  <li>a <strong>vector</strong> <span class="mono">v</span> to rotate,</li>
+  <li>an <strong>angle</strong> <span class="mono">θ</span>, positive by the right-hand rule (right thumb along <span class="mono">k</span>, fingers curl the positive direction).</li>
+</ul>
+
+<p>The trick that makes everything tractable: a rotation around <span class="mono">k</span> leaves anything <em>along</em> <span class="mono">k</span> untouched, and spins anything <em>perpendicular</em> to <span class="mono">k</span> in a circle. So if we can break <span class="mono">v</span> into "along <span class="mono">k</span>" and "perpendicular to <span class="mono">k</span>" pieces, we know exactly what happens to each.</p>
+
+<h2>Step 1 — Split v into parallel and perpendicular parts</h2>
+
+<p>The component of <span class="mono">v</span> lying along <span class="mono">k</span> is its projection onto <span class="mono">k</span>. From the dot-product explainer, the projection of <span class="mono">v</span> onto a <em>unit</em> vector <span class="mono">k</span> is <span class="mono">(k · v) k</span>:</p>
+
+<pre><span class="term-axis">v∥ = (k · v) k</span>          ← the part along the axis
+v⊥ = v − v∥           ← whatever's left, perpendicular to k</pre>
+
+<p>By construction <span class="mono">v = v∥ + v⊥</span>, and <span class="mono">v⊥</span> is perpendicular to <span class="mono">k</span> (subtracting the projection removes exactly the parallel part). The rotation will:</p>
+
+<ul>
+  <li>leave <span class="mono">v∥</span> <strong>exactly as it is</strong> — it's on the axis, it doesn't move;</li>
+  <li>spin <span class="mono">v⊥</span> by θ <strong>within the plane perpendicular to k</strong>.</li>
+</ul>
+
+<figure>
+  <svg width="420" height="250" viewBox="0 0 420 250" style="background:#fafafa; border:1px solid #ddd;">
+    <defs>
+      <marker id="s1-k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#246"/></marker>
+      <marker id="s1-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a40"/></marker>
+      <marker id="s1-par" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#888"/></marker>
+      <marker id="s1-perp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#85a"/></marker>
+    </defs>
+    <!-- axis k -->
+    <line x1="60" y1="190" x2="400" y2="190" stroke="#246" stroke-width="2.5" marker-end="url(#s1-k)"/>
+    <!-- v∥ (projection onto k) -->
+    <line x1="60" y1="190" x2="300" y2="190" stroke="#888" stroke-width="6" opacity="0.5"/>
+    <line x1="60" y1="190" x2="300" y2="190" stroke="#888" stroke-width="2" marker-end="url(#s1-par)"/>
+    <!-- v⊥ (from tip of v∥ up to tip of v) -->
+    <line x1="300" y1="190" x2="300" y2="60" stroke="#85a" stroke-width="2.5" marker-end="url(#s1-perp)"/>
+    <!-- v itself -->
+    <line x1="60" y1="190" x2="300" y2="60" stroke="#a40" stroke-width="3" marker-end="url(#s1-v)"/>
+    <!-- right-angle marker at the foot -->
+    <path d="M 286 190 L 286 176 L 300 176" fill="none" stroke="#666" stroke-width="1.3"/>
+    <circle cx="60" cy="190" r="3" fill="#222"/>
+    <text x="404" y="186" font-family="SF Mono, monospace" font-size="14" fill="#246">k</text>
+    <text x="150" y="115" font-family="SF Mono, monospace" font-size="14" fill="#a40">v</text>
+    <text x="160" y="208" font-family="SF Mono, monospace" font-size="14" fill="#888">v∥ = (k·v) k</text>
+    <text x="308" y="130" font-family="SF Mono, monospace" font-size="14" fill="#85a">v⊥</text>
+  </svg>
+  <figcaption>Dropping <span class="mono">v</span> onto the axis splits it into a right triangle: <span class="mono">v∥</span> runs along <span class="mono">k</span>, <span class="mono">v⊥</span> is the perpendicular leg. The rotation will pin <span class="mono">v∥</span> and spin <span class="mono">v⊥</span>.</figcaption>
+</figure>
+
+<h2>Step 2 — Build a 2D coordinate frame in the rotation plane</h2>
+
+<p>Rotating <span class="mono">v⊥</span> is now a flat, 2D problem — but 2D rotation (from the <a href="rotations.html">rotation explainer</a>) needs two perpendicular axes to express the answer as <span class="mono">cos θ · (first axis) + sin θ · (second axis)</span>. We already have one: <span class="mono">v⊥</span> itself. We need a second axis, perpendicular to <span class="mono">v⊥</span>, in the same plane, and the same length.</p>
+
+<p>The cross product hands it to us. Recall <span class="mono">k × v</span> is perpendicular to both <span class="mono">k</span> and <span class="mono">v</span>. Define:</p>
+
+<pre><span class="term-sin">w = k × v</span></pre>
+
+<p>Two facts make <span class="mono">w</span> the perfect second axis:</p>
+<ul>
+  <li><strong>Same length as v⊥.</strong> Since <span class="mono">|k × v| = |k| |v| sin α = |v| sin α</span> (with <span class="mono">|k| = 1</span>, α the angle between them), and <span class="mono">|v⊥| = |v| sin α</span> too — they match. Also <span class="mono">k × v = k × v⊥</span>, because the parallel part contributes nothing to the cross product.</li>
+  <li><strong>Perpendicular to v⊥, in the rotation plane.</strong> <span class="mono">w</span> is perpendicular to <span class="mono">k</span>, so it lies in the plane; and it's perpendicular to <span class="mono">v</span>, hence to <span class="mono">v⊥</span>.</li>
+</ul>
+
+<p>So <span class="mono">{v⊥, w}</span> is a clean perpendicular pair of equal length spanning the rotation plane — a little 2D coordinate system, tilted in 3D.</p>
+
+<figure>
+  <svg width="420" height="320" viewBox="0 0 420 320" style="background:#fafafa; border:1px solid #ddd;">
+    <defs>
+      <marker id="s2-perp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#85a"/></marker>
+      <marker id="s2-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#073"/></marker>
+      <marker id="s2-rot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a40"/></marker>
+    </defs>
+    <!-- circle the tip travels on -->
+    <circle cx="200" cy="180" r="110" fill="none" stroke="#bbb" stroke-width="1" stroke-dasharray="3 3"/>
+    <!-- the two frame axes -->
+    <line x1="200" y1="180" x2="310" y2="180" stroke="#85a" stroke-width="2.5" marker-end="url(#s2-perp)"/>
+    <line x1="200" y1="180" x2="200" y2="70" stroke="#073" stroke-width="2.5" marker-end="url(#s2-w)"/>
+    <!-- projection guides from the rotated tip -->
+    <line x1="271" y1="96" x2="271" y2="180" stroke="#999" stroke-width="1" stroke-dasharray="4 3"/>
+    <line x1="271" y1="96" x2="200" y2="96" stroke="#999" stroke-width="1" stroke-dasharray="4 3"/>
+    <!-- rotated v⊥ -->
+    <line x1="200" y1="180" x2="271" y2="96" stroke="#a40" stroke-width="3" marker-end="url(#s2-rot)"/>
+    <!-- angle arc -->
+    <path d="M 232 180 A 32 32 0 0 0 222.5 156" fill="none" stroke="#666" stroke-width="1.3"/>
+    <!-- k coming out of the page -->
+    <circle cx="150" cy="240" r="9" fill="none" stroke="#246" stroke-width="1.8"/>
+    <circle cx="150" cy="240" r="2.2" fill="#246"/>
+    <circle cx="200" cy="180" r="3" fill="#222"/>
+    <text x="314" y="185" font-family="SF Mono, monospace" font-size="14" fill="#85a">v⊥</text>
+    <text x="150" y="60" font-family="SF Mono, monospace" font-size="14" fill="#073">w = k×v</text>
+    <text x="276" y="92" font-family="SF Mono, monospace" font-size="14" fill="#a40">v⊥ cosθ + w sinθ</text>
+    <text x="240" y="168" font-family="SF Mono, monospace" font-size="13" fill="#666">θ</text>
+    <text x="164" y="245" font-family="SF Mono, monospace" font-size="13" fill="#246">k (toward you)</text>
+  </svg>
+  <figcaption>Looking straight down the axis <span class="mono">k</span> (which now points out of the page). The rotation plane becomes an ordinary 2D plane with perpendicular axes <span class="mono">v⊥</span> and <span class="mono">w</span> of equal length, so rotating <span class="mono">v⊥</span> by θ is just <span class="mono">cos θ</span> along itself plus <span class="mono">sin θ</span> along <span class="mono">w</span>.</figcaption>
+</figure>
+
+<h2>Step 3 — Rotate within the plane, then add the axis part back</h2>
+
+<p>In that 2D frame, rotating <span class="mono">v⊥</span> by θ is the textbook 2D rotation: stay <span class="mono">cos θ</span> along the starting axis, swing <span class="mono">sin θ</span> toward the perpendicular one.</p>
+
+<pre>v⊥_rot = <span class="term-cos">v⊥ cos θ</span> + <span class="term-sin">w sin θ</span></pre>
+
+<p>The parallel part rides along unchanged, so the full rotated vector is:</p>
+
+<pre>v_rot = v∥ + v⊥_rot
+      = <span class="term-axis">v∥</span> + <span class="term-cos">v⊥ cos θ</span> + <span class="term-sin">w sin θ</span></pre>
+
+<p>Now substitute <span class="mono">v⊥ = v − v∥</span> and <span class="mono">v∥ = (k · v) k</span> and <span class="mono">w = k × v</span>, and collect:</p>
+
+<pre>v_rot = (k·v)k + (v − (k·v)k) cos θ + (k × v) sin θ
+      = <span class="term-cos">v cos θ</span> + <span class="term-sin">(k × v) sin θ</span> + <span class="term-axis">k (k · v)(1 − cos θ)</span></pre>
+
+<p>That's Rodrigues' formula. <span class="key">It's just "leave the axis part alone, rotate the rest in its plane" — written out in dot- and cross-product arithmetic.</span> Each term has a job:</p>
+
+<ul>
+  <li><span class="term-cos">v cos θ</span> — the original vector, shrinking as it tips away (the <span class="mono">cos</span> part of the in-plane swing, applied to all of <span class="mono">v</span>);</li>
+  <li><span class="term-sin">(k × v) sin θ</span> — the sideways swing, perpendicular to both axis and vector;</li>
+  <li><span class="term-axis">k (k · v)(1 − cos θ)</span> — a correction that restores the parallel component the <span class="mono">cos θ</span> term over-shrank, so the axis-aligned part stays put.</li>
+</ul>
+
+<h2>Watch it happen</h2>
+
+<p>The axis <span class="term-axis">k</span> (blue) is fixed. Drag the slider to rotate <span class="mono">v</span> by θ around it. The rotated vector's tip traces a circle in the plane perpendicular to <span class="mono">k</span> — and that circle's two perpendicular spokes are exactly <span class="term-cos">v⊥</span> and <span class="term-sin">w = k × v</span>.</p>
+
+<figure>
+  <svg id="rod-demo" width="480" height="380" viewBox="0 0 480 380" style="background: #fafafa; border: 1px solid #ddd;">
+    <defs>
+      <marker id="rd-arr-k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#246"/></marker>
+      <marker id="rd-arr-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a40"/></marker>
+      <marker id="rd-arr-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#073"/></marker>
+    </defs>
+    <g id="rd-scene"></g>
+  </svg>
+  <div style="margin-top: 0.5rem;">
+    <label>θ = <span id="rd-angle-label" class="mono">0.0°</span></label>
+    <br/>
+    <input type="range" id="rd-slider" min="-180" max="180" value="0" step="1"/>
+  </div>
+  <div class="matrix-readout" id="rd-readout"></div>
+  <figcaption>Blue: axis <span class="mono">k</span> (fixed). Orange: <span class="mono">v</span>, swinging to <span class="mono">v_rot</span>. Green: <span class="mono">w = k × v</span>. Grey dashed: the circle the tip traces, and the parallel part <span class="mono">v∥</span> that never moves.</figcaption>
+</figure>
+
+<script>
+(() => {
+  // Isometric-ish projection, same scheme as the rotations explainer.
+  const cx = 240, cy = 210, scale = 110;
+  const a = Math.PI / 6;
+  function project(x, y, z) {
+    const px = cx + (x - z) * scale * Math.cos(a);
+    const py = cy - y * scale - (x + z) * scale * Math.sin(a);
+    return [px, py];
+  }
+
+  // Vector helpers (Vec3 as [x,y,z]).
+  const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+  const cross = (a, b) => [
+    a[1]*b[2] - a[2]*b[1],
+    a[2]*b[0] - a[0]*b[2],
+    a[0]*b[1] - a[1]*b[0],
+  ];
+  const add = (...vs) => vs.reduce((s, v) => [s[0]+v[0], s[1]+v[1], s[2]+v[2]], [0,0,0]);
+  const scl = (v, s) => [v[0]*s, v[1]*s, v[2]*s];
+  const norm = (v) => scl(v, 1 / Math.hypot(...v));
+
+  // Tilted axis so the geometry reads in 3D; a vector not parallel to it.
+  const k = norm([0.25, 1, 0.15]);
+  const v = [1.1, 0.15, 0.0];
+
+  // Rodrigues, written exactly as the formula above.
+  function rodrigues(v, k, theta) {
+    const c = Math.cos(theta), s = Math.sin(theta);
+    return add(scl(v, c), scl(cross(k, v), s), scl(k, dot(k, v) * (1 - c)));
+  }
+
+  const scene = document.getElementById('rd-scene');
+  const slider = document.getElementById('rd-slider');
+  const angleLabel = document.getElementById('rd-angle-label');
+  const readout = document.getElementById('rd-readout');
+
+  function arrow(p1, p2, color, marker, thick, opacity = 1) {
+    const [x1, y1] = project(...p1);
+    const [x2, y2] = project(...p2);
+    return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="${thick}" marker-end="url(#${marker})" opacity="${opacity}"/>`;
+  }
+  function dashed(p1, p2, color) {
+    const [x1, y1] = project(...p1);
+    const [x2, y2] = project(...p2);
+    return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="1.2" opacity="0.5" stroke-dasharray="4 3"/>`;
+  }
+  function label(p, txt, color) {
+    const [x, y] = project(...p);
+    return `<text x="${x+6}" y="${y-4}" font-family="SF Mono, monospace" font-size="13" fill="${color}">${txt}</text>`;
+  }
+
+  // Pieces that don't depend on θ.
+  const vPar = scl(k, dot(k, v));                 // v∥
+  const vPerp = add(v, scl(vPar, -1));            // v⊥
+  const w = cross(k, v);                          // second plane axis
+
+  function render() {
+    const deg = +slider.value;
+    const theta = deg * Math.PI / 180;
+    const vRot = rodrigues(v, k, theta);
+
+    // Circle traced by the tip: centre at v∥, radius |v⊥|, in the {v⊥, w} plane.
+    const e1 = vPerp, e2 = w; // equal length, perpendicular
+    const ring = [];
+    for (let i = 0; i <= 64; i++) {
+      const p = (i / 64) * 2 * Math.PI;
+      const pt = add(vPar, scl(e1, Math.cos(p)), scl(e2, Math.sin(p)));
+      ring.push(project(...pt).join(','));
+    }
+
+    let svg = '';
+    svg += `<polyline points="${ring.join(' ')}" fill="none" stroke="#bbb" stroke-width="1" stroke-dasharray="3 3"/>`;
+
+    // Axis k (both directions, so it reads as a spin axis).
+    svg += arrow(scl(k, -1.3), scl(k, 1.6), '#246', 'rd-arr-k', 3);
+    svg += label(scl(k, 1.6), 'k', '#246');
+
+    // Parallel part (where the tip's circle is centred).
+    svg += dashed([0,0,0], vPar, '#888');
+    svg += dashed(vPar, vRot, '#888');
+    svg += label(vPar, 'v∥', '#888');
+
+    // w = k × v (the sideways axis), faint.
+    svg += arrow([0,0,0], w, '#073', 'rd-arr-w', 2, 0.7);
+    svg += label(w, 'w = k×v', '#073');
+
+    // Original v (ghost) and rotated v.
+    svg += dashed([0,0,0], v, '#a40');
+    svg += arrow([0,0,0], vRot, '#a40', 'rd-arr-v', 3.5);
+    svg += label(vRot, 'v_rot', '#a40');
+
+    scene.innerHTML = svg;
+
+    angleLabel.textContent = `${deg.toFixed(1)}°`;
+    readout.textContent =
+      `k = (${k.map(n => n.toFixed(2)).join(', ')})    (unit axis)\n` +
+      `v = (${v.map(n => n.toFixed(2)).join(', ')})\n` +
+      `θ = ${deg}°\n` +
+      `v_rot = v·cosθ + (k×v)·sinθ + k(k·v)(1−cosθ)\n` +
+      `      = (${vRot.map(n => n.toFixed(2)).join(', ')})`;
+  }
+
+  slider.addEventListener('input', render);
+  render();
+})();
+</script>
+
+<h2>Sanity checks</h2>
+
+<p>Two angles let you verify the formula by eye:</p>
+
+<ul>
+  <li><strong>θ = 0:</strong> <span class="mono">cos 0 = 1</span>, <span class="mono">sin 0 = 0</span>, <span class="mono">1 − cos 0 = 0</span>, so <span class="mono">v_rot = v</span>. No rotation, no change. ✓</li>
+  <li><strong>v parallel to k:</strong> then <span class="mono">k × v = 0</span> and <span class="mono">(k · v) k = v</span>. The formula collapses to <span class="mono">v cos θ + k(k·v)(1−cos θ) = v cos θ + v(1−cos θ) = v</span>. A vector on the axis is unaffected, for any θ. ✓</li>
+</ul>
+
+<h2>The 180° case — and why it bit us</h2>
+
+<p>Set <strong>θ = 180°</strong>: <span class="mono">cos θ = −1</span>, <span class="mono">sin θ = 0</span>, <span class="mono">1 − cos θ = 2</span>:</p>
+
+<pre>v_rot = −v + 0 + 2 k (k · v)
+      = 2 v∥ − v</pre>
+
+<p>This is a reflection of <span class="mono">v</span> through the axis. If — and only if — <span class="mono">v</span> is <em>perpendicular</em> to <span class="mono">k</span>, then <span class="mono">v∥ = 0</span> and this is exactly <span class="mono">−v</span>. <span class="key">That's the property the orbit transition relies on: to flip the camera's forward vector to its exact opposite, rotate by π around an axis perpendicular to forward.</span></p>
+
+<p>The reason an axis is needed at all: <span class="mono">v</span> and <span class="mono">−v</span> are antipodal, and there's no <em>unique</em> way to rotate one into the other — you can sweep through any plane containing <span class="mono">v</span>. Picking the axis picks the plane. (Try it above: the path from <span class="mono">v</span> to <span class="mono">−v</span> sweeps through wherever <span class="mono">w</span> points; choose a different <span class="mono">k</span> and the half-circle tilts.)</p>
+
+<h2>Connection to the code</h2>
+
+<p>In <span class="mono">transitions/orbit/orbit.ts</span> the formula is implemented directly on <span class="mono">Vec3</span> tuples — no matrix needed, since we're rotating a single vector, not a whole scene:</p>
+
+<pre>// Rodrigues' rotation: rotate v around unit axis k by angle theta.
+function rotateAboutAxis(v: Vec3, k: Vec3, theta: number): Vec3 {
+  const c = Math.cos(theta);
+  const s = Math.sin(theta);
+  const kv = cross(k, v);
+  const kd = dot(k, v) * (1 - c);
+  return [
+    v[0] * c + kv[0] * s + k[0] * kd,
+    v[1] * c + kv[1] * s + k[1] * kd,
+    v[2] * c + kv[2] * s + k[2] * kd,
+  ];
+}</pre>
+
+<p>Line up the three contributions with the three terms of the formula: <span class="term-cos"><span class="mono">v * c</span></span> is <span class="mono">v cos θ</span>, <span class="term-sin"><span class="mono">kv * s</span></span> is <span class="mono">(k × v) sin θ</span>, and <span class="term-axis"><span class="mono">k * kd</span></span> is <span class="mono">k (k · v)(1 − cos θ)</span>. It's the math on this page, transcribed.</p>
+
+<p>The orbit code uses it to ease the camera's look direction from <span class="mono">+velocity</span> to <span class="mono">−velocity</span> across the dot-plane crossing:</p>
+
+<pre>const movementForward = normalize(vel);
+
+const turnStart = 0.55;
+const turnEnd = 0.85;
+const s = clamp((t - turnStart) / (turnEnd - turnStart), 0, 1);
+const blend = s * s * (3 - 2 * s);                 // smoothstep 0 → 1
+
+const upDotF = dot(worldUpHint, movementForward);
+const rotationAxis = normalize([
+  worldUpHint[0] - upDotF * movementForward[0],
+  worldUpHint[1] - upDotF * movementForward[1],
+  worldUpHint[2] - upDotF * movementForward[2],
+]);
+const cameraForward = rotateAboutAxis(movementForward, rotationAxis, -blend * Math.PI);</pre>
+
+<p><span class="mono">blend</span> ramps <span class="mono">0 → 1</span> over the turn window, so the angle <span class="mono">−blend·π</span> sweeps <span class="mono">0 → −π</span> — the camera looks straight ahead before the turn, fully reversed after. The negative sign just picks which way it swings (see "picking the axis" below).</p>
+
+<h3>How the axis is chosen</h3>
+
+<p>The whole flip hinges on getting <span class="mono">rotationAxis</span> right. We need an axis that is <strong>perpendicular to <span class="mono">movementForward</span></strong> — that's the non-negotiable requirement, because only then does <span class="mono">θ = π</span> land exactly on <span class="mono">−movementForward</span> (the 180° case above). Any axis with a component along forward would leave <span class="mono">v∥ ≠ 0</span>, and the flip would miss the target direction.</p>
+
+<p>Those three lines are <strong>Gram–Schmidt</strong>: take the up vector and subtract off its forward-parallel part, leaving only the perpendicular remainder.</p>
+
+<pre>rotationAxis = normalize( up − (up · fwd) · fwd )
+                          └──────┬──────┘
+                          the part of up that points along fwd,
+                          removed — what's left is ⟂ fwd</pre>
+
+<p>This is exactly the <span class="mono">v⊥ = v − (k·v)k</span> projection from Step 1, used in reverse: there we removed the perpendicular part to isolate the axis component; here we remove the parallel part to isolate a perpendicular direction. <span class="key">Subtracting a vector's projection onto another always leaves something perpendicular to it.</span></p>
+
+<p>Two choices remain free, and both are deliberate:</p>
+
+<ul>
+  <li><strong>Which perpendicular direction?</strong> Infinitely many vectors are perpendicular to forward — they fill a whole plane. We seed from <span class="mono">worldUpHint</span> specifically so the camera flips through its own <em>up/down</em> plane (a pitch-like tumble) rather than yawing sideways. Seeding from a different vector would tilt the plane the flip sweeps through, the same way changing <span class="mono">k</span> tilts the half-circle in the demo above.</li>
+  <li><strong>Which way around?</strong> A perpendicular axis still leaves two opposite spin directions (<span class="mono">+axis</span> vs <span class="mono">−axis</span>, equivalently <span class="mono">+θ</span> vs <span class="mono">−θ</span>). The code rotates by <span class="mono">−blend·π</span> rather than <span class="mono">+blend·π</span> to make the camera tumble the visually preferred way through the crossing. Flipping that sign reverses the tumble without changing the start or end direction.</li>
+</ul>
+
+<p>One subtlety worth noting: this construction is only stable while <span class="mono">worldUpHint</span> isn't parallel to forward. If up ever lined up with the direction of travel, <span class="mono">up − (up·fwd)fwd</span> would collapse toward zero and <span class="mono">normalize</span> would have nothing to work with. On this flight path the up hint stays roughly vertical while forward is dominated by the z-crossing, so they're comfortably non-parallel through the turn window.</p>
+
+<h2>Why not a rotation matrix?</h2>
+
+<p>You <em>could</em> build a 3×3 rotation matrix for an arbitrary axis (it's Rodrigues' formula reorganised into matrix entries) and multiply. That's worth it when you rotate <strong>many</strong> vectors by the <strong>same</strong> rotation — build the matrix once, reuse it. Here we rotate one vector per frame by a different angle each time, so the direct vector form is leaner: three multiply-adds and one cross product, no matrix to assemble. It's the same arithmetic either way — the matrix just pre-packages it.</p>
+
+</body>
+</html>
