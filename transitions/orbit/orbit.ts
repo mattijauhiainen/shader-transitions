@@ -1,4 +1,5 @@
 import { LUMA } from "../../luma.ts";
+import * as mat4 from "../../mat4.ts";
 import {
   CELL_SIZE,
   PITCH,
@@ -22,20 +23,15 @@ export function createOrbitTransition(ctx: RendererContext): Transition {
     ctx.cols,
     ctx.rows,
   );
-  gl.uniform2f(
-    gl.getUniformLocation(program, "uVIEWPORT"),
-    ctx.canvasWidth,
-    ctx.canvasHeight,
-  );
   gl.uniform1f(gl.getUniformLocation(program, "uCELL_SIZE"), CELL_SIZE);
   gl.uniform1f(gl.getUniformLocation(program, "uPITCH"), PITCH);
+  gl.uniform1f(gl.getUniformLocation(program, "uFOCAL_PX"), focalLen);
   gl.uniform3f(
     gl.getUniformLocation(program, "uLUMA"),
     LUMA[0],
     LUMA[1],
     LUMA[2],
   );
-  gl.uniform1f(gl.getUniformLocation(program, "uFOCAL_LEN"), focalLen);
   gl.uniform1i(gl.getUniformLocation(program, "uCELL_COLORS_A"), 0);
   gl.uniform1i(gl.getUniformLocation(program, "uLUMA_RANGE_A"), 1);
   gl.uniform1i(gl.getUniformLocation(program, "uCELL_COLORS_B"), 2);
@@ -45,21 +41,22 @@ export function createOrbitTransition(ctx: RendererContext): Transition {
   const uCamPos = gl.getUniformLocation(program, "uCamPos")!;
   const uCamRight = gl.getUniformLocation(program, "uCamRight")!;
   const uCamUp = gl.getUniformLocation(program, "uCamUp")!;
-  const uCamForward = gl.getUniformLocation(program, "uCamForward")!;
+  const uCamFwd = gl.getUniformLocation(program, "uCamFwd")!;
   const uSphereShading = gl.getUniformLocation(program, "uSphereShading")!;
+  const uMVP = gl.getUniformLocation(program, "uMVP")!;
 
   const totalInstances = ctx.cols * ctx.rows;
 
-  const SEGMENTS = 24;
-  const verts = new Float32Array((SEGMENTS + 2) * 2);
-  verts[0] = 0;
-  verts[1] = 0;
-  for (let i = 0; i <= SEGMENTS; i++) {
-    const a = (i / SEGMENTS) * Math.PI * 2;
-    verts[(i + 1) * 2] = Math.cos(a);
-    verts[(i + 1) * 2 + 1] = Math.sin(a);
-  }
-  const vertexCount = SEGMENTS + 2;
+  // Billboard quad in corner-space [-1, 1]^2 as a triangle list. The fragment
+  // shader treats these coords as (x, y) on a unit sphere and reconstructs z
+  // to fake per-pixel sphere shading — sphere impostor in two triangles
+  // instead of a tessellated mesh.
+  // biome-ignore format: 2-triangle quad reads better as a grid.
+  const verts = new Float32Array([
+    -1, -1, 1, -1, 1, 1,
+    -1, -1, 1, 1, -1, 1,
+  ]);
+  const vertexCount = verts.length / 2;
 
   const vao = gl.createVertexArray()!;
   gl.bindVertexArray(vao);
@@ -76,12 +73,60 @@ export function createOrbitTransition(ctx: RendererContext): Transition {
   const Wx = ctx.cols * PITCH * 0.55;
   const Hy = ctx.rows * PITCH * 0.55;
 
+  const proj = mat4.create();
+  const view = mat4.create();
+  const mvp = mat4.create();
+
+  // Projection is frame-invariant, so build it once. fovY is chosen so the
+  // z = 0 dot plane maps 1 world unit -> 1 pixel.
+  const fovY = 2 * Math.atan(ctx.canvasHeight / 2 / D);
+  mat4.perspective(proj, fovY, ctx.canvasWidth / ctx.canvasHeight, 1.0, 10000);
+
+  // Lens shift: anchor the grid to the pixel origin the way the resting
+  // halftone (and every 2D transition) does, instead of centering it on the
+  // canvas. The grid is rounded up to cover the canvas (cols*PITCH >=
+  // canvasWidth), so a canvas-centered grid lands every dot up to half a cell
+  // off, producing a visible jump on takeover/handoff. Offsetting the
+  // projection's principal point by that half-overflow shifts the whole render
+  // back into pixel alignment -- exact at the on-axis handoff frames,
+  // imperceptible mid-flight.
+  proj[8] = (ctx.canvasWidth - ctx.cols * PITCH) / ctx.canvasWidth;
+  proj[9] = (ctx.canvasHeight - ctx.rows * PITCH) / ctx.canvasHeight;
+
   return {
     durationMs: 20000,
     prepareRender: (_durationMs: number) => {
       return (t: number) => {
         const { pos, vel, acc } = pathSample(t, Wx, Hy, D);
-        const cam = cameraOrientation(t, pos, vel, acc, D);
+        const worldUpHint = cameraUp(t, pos, vel, acc, D);
+        const movementForward = normalize(vel);
+
+        // After we've crossed to the other side, we need to flip the camera
+        // direction to look backwards so that we can hand over to the next
+        // transition from rest position. Do this slightly after we've crossed
+        // to the other side.
+        const turnStart = 0.55;
+        const turnEnd = 0.85;
+        const s = clamp((t - turnStart) / (turnEnd - turnStart), 0, 1);
+        const blend = s * s * (3 - 2 * s);
+        const upDotF = dot(worldUpHint, movementForward);
+        const rotationAxis = normalize([
+          worldUpHint[0] - upDotF * movementForward[0],
+          worldUpHint[1] - upDotF * movementForward[1],
+          worldUpHint[2] - upDotF * movementForward[2],
+        ]);
+        const cameraForward = rotateAboutAxis(
+          movementForward,
+          rotationAxis,
+          -blend * Math.PI,
+        );
+        const target: mat4.Vec3 = [
+          pos[0] + cameraForward[0],
+          pos[1] + cameraForward[1],
+          pos[2] + cameraForward[2],
+        ];
+        mat4.lookAt(view, pos, target, worldUpHint);
+        mat4.multiply(mvp, proj, view);
 
         // Fade sphere shading in at start and out at end to make sure image
         // looks the same when we take over from previous transition or hand
@@ -96,21 +141,18 @@ export function createOrbitTransition(ctx: RendererContext): Transition {
         gl.viewport(0, 0, ctx.canvasWidth, ctx.canvasHeight);
         gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        gl.enable(gl.DEPTH_TEST);
 
         gl.uniform3f(uCamPos, pos[0], pos[1], pos[2]);
-        gl.uniform3f(uCamRight, cam.right[0], cam.right[1], cam.right[2]);
-        gl.uniform3f(uCamUp, cam.up[0], cam.up[1], cam.up[2]);
-        gl.uniform3f(
-          uCamForward,
-          cam.forward[0],
-          cam.forward[1],
-          cam.forward[2],
-        );
+        // Camera basis in world space, read straight out of the view matrix.
+        // The columns of the view matrix's rotation block are the world axes
+        // expressed in camera space, so its rows are the camera axes expressed
+        // in world space: row 0 = right, row 1 = up, row 2 = -forward (i.e.
+        // the direction from the scene back toward the camera).
+        gl.uniform3f(uCamRight, view[0], view[4], view[8]);
+        gl.uniform3f(uCamUp, view[1], view[5], view[9]);
+        gl.uniform3f(uCamFwd, view[2], view[6], view[10]);
         gl.uniform1f(uSphereShading, sphereShading);
-
-        gl.enable(gl.BLEND);
-        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        gl.uniformMatrix4fv(uMVP, false, mvp);
 
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, ctx.current.cellTex);
@@ -121,8 +163,12 @@ export function createOrbitTransition(ctx: RendererContext): Transition {
         gl.activeTexture(gl.TEXTURE3);
         gl.bindTexture(gl.TEXTURE_2D, ctx.next.lumaRangeTex);
 
+        gl.enable(gl.DEPTH_TEST);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
         gl.bindVertexArray(vao);
-        gl.drawArraysInstanced(gl.TRIANGLE_FAN, 0, vertexCount, totalInstances);
+        gl.drawArraysInstanced(gl.TRIANGLES, 0, vertexCount, totalInstances);
         gl.bindVertexArray(null);
 
         gl.disable(gl.BLEND);
@@ -267,7 +313,7 @@ function zProfile(t: number, D: number): Derivatives {
   const thC = Math.tanh(K_C);
   const thCu = Math.tanh(K_C * u);
   const sech2Cu = 1 - thCu * thCu;
-  const norm = D / (A + B);
+  const norm = -D / (A + B);
 
   return {
     f: norm * ((A * Math.sinh(K_Z * u)) / shZ + (B * thCu) / thC),
@@ -280,52 +326,6 @@ function zProfile(t: number, D: number): Derivatives {
       ((A * (4 * K_Z * K_Z * Math.sinh(K_Z * u))) / shZ +
         (B * (-8 * K_C * K_C * sech2Cu * thCu)) / thC),
   };
-}
-
-/**
- * Computes the camera orientation (forward, right, up) for a given point on the
- * orbit flight path. Combines the velocity-derived forward direction with
- * banking-aware up vector from {@link cameraUp}.
- *
- * @param t - Normalized time in [0, 1].
- * @param pos - Camera position at time t.
- * @param vel - Camera velocity (first derivative) at time t.
- * @param acc - Camera acceleration (second derivative) at time t.
- * @param D - Depth: z-distance from origin to each image plane.
- * @returns Orthonormal camera basis (forward, right, up) in world space.
- */
-function cameraOrientation(
-  t: number,
-  pos: Vec3,
-  vel: Vec3,
-  acc: Vec3,
-  D: number,
-): { forward: Vec3; right: Vec3; up: Vec3 } {
-  // Flip the forward direction instantly at t = 0.5. This hides the size
-  // discontinuity when crossing the dot plane — the same dot on frame B has
-  // different luma (and therefore a different radius), so snapping the view
-  // direction keeps that mismatch behind the camera where it isn't visible.
-  const flipSign = Math.sign(0.5 - t);
-  const forward = normalize([
-    vel[0] * flipSign,
-    vel[1] * flipSign,
-    vel[2] * flipSign,
-  ]);
-  const worldUpHint = cameraUp(t, pos, vel, acc, D);
-
-  // The "worldUpHint" gives us the desired up direction for the current
-  // animation phase. "forward" gives the direction we are actually
-  // looking at. We want to roll on that axis, so that the up direction there
-  // matches the up-direction of the worldUpHint. This can be done by first
-  // taking cross product between worldUpHint and forward, which gives a vector
-  // that is perpendicular to those two vectors. Then we use the "right" vector
-  // and do another cross product between it and forward. This will give a new
-  // up direction for the camera, which will be perpendicular to forward
-  // (meaning it is as aligned with the world up hint as possible given the
-  // camera direction.)
-  const right = normalize(cross(worldUpHint, forward));
-  const camUp = cross(forward, right);
-  return { forward, right, up: camUp };
 }
 
 /**
@@ -360,7 +360,7 @@ function cameraUp(t: number, pos: Vec3, vel: Vec3, acc: Vec3, D: number): Vec3 {
   // `[0, 1 - rollT, cruiseUpZ · rollT]`.
 
   const rollT = Math.exp(-((pos[2] / D) ** 2) * 2) - Math.exp(-2);
-  const cruiseUpZ = Math.tanh(8 * (2 * t - 1));
+  const cruiseUpZ = -Math.tanh(8 * (2 * t - 1));
   const baseUp: Vec3 = [0, 1 - rollT, cruiseUpZ * rollT];
 
   // Bank the up vector in curves to imitate how an airplane would take the
@@ -407,5 +407,26 @@ function cross(a: Vec3, b: Vec3): Vec3 {
     a[1] * b[2] - a[2] * b[1],
     a[2] * b[0] - a[0] * b[2],
     a[0] * b[1] - a[1] * b[0],
+  ];
+}
+
+function dot(a: Vec3, b: Vec3): number {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function clamp(x: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, x));
+}
+
+// Rodrigues' rotation: rotate v around unit axis by angle theta.
+function rotateAboutAxis(v: Vec3, rotationAxis: Vec3, theta: number): Vec3 {
+  const cosine = Math.cos(theta);
+  const sine = Math.sin(theta);
+  const kv = cross(rotationAxis, v);
+  const kd = dot(rotationAxis, v) * (1 - cosine);
+  return [
+    v[0] * cosine + kv[0] * sine + rotationAxis[0] * kd,
+    v[1] * cosine + kv[1] * sine + rotationAxis[1] * kd,
+    v[2] * cosine + kv[2] * sine + rotationAxis[2] * kd,
   ];
 }
