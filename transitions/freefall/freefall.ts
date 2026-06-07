@@ -5,6 +5,7 @@ import {
   type RendererContext,
   type Transition,
 } from "../../renderer.ts";
+import { smoothstep } from "../../smoothstep.ts";
 import fragSrc from "./freefall.frag.glsl" with { type: "text" };
 import vertSrc from "./freefall.vert.glsl" with { type: "text" };
 
@@ -291,7 +292,7 @@ export function createFreefallTransition(ctx: RendererContext): Transition {
 // With total travel of 33.5·focalLen, plane 0 (at camStart + focalLen) is
 // crossed when camTrajectory(t) = 1/33.5 ≈ 0.030, which lands at t ≈ 0.10.
 function camTrajectory(t: number): number {
-  return t * t * (3 - 2 * t);
+  return smoothstep(t);
 }
 
 interface Keyframe {

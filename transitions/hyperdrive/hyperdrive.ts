@@ -5,6 +5,7 @@ import {
   type RendererContext,
   type Transition,
 } from "../../renderer.ts";
+import { smoothstep } from "../../smoothstep.ts";
 import fragSrc from "./hyperdrive.frag.glsl" with { type: "text" };
 import vertSrc from "./hyperdrive.vert.glsl" with { type: "text" };
 
@@ -170,9 +171,7 @@ export function createHyperdriveTransition(ctx: RendererContext): Transition {
         // during the tunnel. The last plane is always forced flat per-draw via
         // the isLastPlane check below.
         const sphereShading =
-          firstAhead === 0
-            ? Math.max(0, 1 - (planeZ[0] - camZ) / focalLen)
-            : 1;
+          firstAhead === 0 ? Math.max(0, 1 - (planeZ[0] - camZ) / focalLen) : 1;
 
         // Compute farDist so that we can clip planes that don't need to be
         // visible in the shader.
@@ -211,7 +210,7 @@ export function createHyperdriveTransition(ctx: RendererContext): Transition {
         let rollProgress = 0;
         if (t > ROLL_START && t < ROLL_END) {
           const u = (t - ROLL_START) / (ROLL_END - ROLL_START);
-          rollProgress = u * u * (3 - 2 * u); // smoothstep
+          rollProgress = smoothstep(u);
         } else if (t >= ROLL_END) {
           rollProgress = 1;
         }
@@ -262,7 +261,6 @@ export function createHyperdriveTransition(ctx: RendererContext): Transition {
             );
             alpha *= gatedProgress;
           }
-
 
           // First half uses frame A, rest uses frame B
           const useB = i >= TOTAL_PLANES / 2;

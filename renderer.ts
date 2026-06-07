@@ -9,6 +9,7 @@ import lumaRangesFrag from "./lumaRanges.frag.glsl" with { type: "text" };
 import { createCollapseTransition } from "./transitions/collapse/collapse.ts";
 import { createExplodeTransition } from "./transitions/explode/explode.ts";
 import { createFreefallTransition } from "./transitions/freefall/freefall.ts";
+import { createGlobeTransition } from "./transitions/globe/globe.ts";
 import { createHyperdriveTransition } from "./transitions/hyperdrive/hyperdrive.ts";
 import { createMitosisTransition } from "./transitions/mitosis/mitosis.ts";
 import { createOrbitTransition } from "./transitions/orbit/orbit.ts";
@@ -16,9 +17,9 @@ import { createPageflipTransition } from "./transitions/pageflip/pageflip.ts";
 import { createRadialTransition } from "./transitions/radial/radial.ts";
 import { createRainTransition } from "./transitions/rain/rain.ts";
 import { createShrinkTransition } from "./transitions/shrink/shrink.ts";
+import { createTiltTransition } from "./transitions/tilt/tilt.ts";
 import { createWalkTransition } from "./transitions/walk/walk.ts";
 import { createWipeTransition } from "./transitions/wipe/wipe.ts";
-import { createTiltTransition } from "./transitions/tilt/tilt.ts";
 
 export const CELL_SIZE = 5.0;
 export const PITCH = 6.0;
@@ -115,6 +116,7 @@ export class Renderer implements RendererContext {
       { name: "hyperdrive", ...createHyperdriveTransition(this) },
       { name: "freefall", ...createFreefallTransition(this) },
       { name: "tilt", ...createTiltTransition(this) },
+      { name: "globe", ...createGlobeTransition(this) },
     ];
   }
 

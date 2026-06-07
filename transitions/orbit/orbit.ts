@@ -6,6 +6,7 @@ import {
   type RendererContext,
   type Transition,
 } from "../../renderer.ts";
+import { smoothstep } from "../../smoothstep.ts";
 import fragSrc from "./orbit.frag.glsl" with { type: "text" };
 import vertSrc from "./orbit.vert.glsl" with { type: "text" };
 
@@ -107,8 +108,7 @@ export function createOrbitTransition(ctx: RendererContext): Transition {
         // to the other side.
         const turnStart = 0.55;
         const turnEnd = 0.85;
-        const s = clamp((t - turnStart) / (turnEnd - turnStart), 0, 1);
-        const blend = s * s * (3 - 2 * s);
+        const blend = smoothstep(t, [turnStart, turnEnd]);
         const upDotF = dot(worldUpHint, movementForward);
         const rotationAxis = normalize([
           worldUpHint[0] - upDotF * movementForward[0],
@@ -412,10 +412,6 @@ function cross(a: Vec3, b: Vec3): Vec3 {
 
 function dot(a: Vec3, b: Vec3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-}
-
-function clamp(x: number, lo: number, hi: number): number {
-  return Math.min(hi, Math.max(lo, x));
 }
 
 // Rodrigues' rotation: rotate v around unit axis by angle theta.

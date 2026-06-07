@@ -17,4 +17,6 @@ The frontend is deployed as a static site. Do not add any features that would re
 
 Run biome after all your code changes to ensure consistent formatting.
 
+TypeScript variable naming: Use `SCREAMING_CASE` only for true constants declared at module (file) scope. Function parameters and function-local variables use `camelCase`, even when `const` and never reassigned. This is independent of the GLSL uniform convention below, which still applies to uniform names regardless of where they're declared.
+
 GLSL uniform naming: scene uniforms (set once at init) use `SCREAMING_CASE` with a `u` prefix (e.g. `uGRID_SIZE`, `uCELL_SIZE`, `uPITCH`). Per-frame uniforms (set each render call) use `camelCase` with a `u` prefix (e.g. `uTime`, `uPhase`, `uCamPos`).

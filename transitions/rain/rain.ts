@@ -1,3 +1,4 @@
+import { clamp } from "../../clamp.ts";
 import { LUMA } from "../../luma.ts";
 import {
   CELL_SIZE,
@@ -151,7 +152,7 @@ function generateDropMap(cols: number, rows: number): Float32Array {
   const centerTimes = new Float32Array(centers.length);
   for (let i = 0; i < centers.length; i++) {
     const uniformRank = (order[i] + 0.5) / centers.length;
-    let normalizedTime = Math.max(0, Math.min(1, invNormCDF(uniformRank)));
+    let normalizedTime = clamp(invNormCDF(uniformRank));
     // Bell curve is infinite. We cannot do that, so the values far on the left
     // and far on the right get clamped to the beginning of the range. This
     // creates cluster of cells at start and end of the animation. Take the first

@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Globe transition — how the rectangle becomes a sphere</title>
+<style>
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    max-width: 820px;
+    margin: 2rem auto;
+    padding: 0 1.25rem;
+    line-height: 1.6;
+    color: #222;
+    background: #fdfdfa;
+  }
+  h1, h2, h3 { font-family: "Helvetica Neue", Arial, sans-serif; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: .3rem; }
+  h2 { margin-top: 2.4rem; border-bottom: 1px solid #ccc; padding-bottom: .2rem; }
+  h3 { margin-top: 1.6rem; }
+  code, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.95em; }
+  pre, .math {
+    background: #f3f1ea;
+    padding: .8rem 1rem;
+    overflow-x: auto;
+    border-left: 3px solid #888;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.92em;
+    white-space: pre;
+  }
+  figure { margin: 1.5rem auto; text-align: center; }
+  figcaption {
+    font-size: 0.9em; color: #555; margin-top: .4rem; font-style: italic;
+  }
+  svg { max-width: 100%; height: auto; }
+  .key { background: #fff7d6; padding: .1em .35em; border-radius: 3px; }
+  .bad { color: #b33; }
+  .good { color: #2a6; }
+  aside.note {
+    background: #eef4fb;
+    border-left: 3px solid #6a9ad0;
+    padding: .7rem 1rem;
+    margin: 1.2rem 0;
+    font-size: 0.95em;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.95em; }
+  th, td { text-align: left; padding: .5rem .7rem; border-bottom: 1px solid #ddd; }
+  th { background: #f3f1ea; }
+  .panel {
+    background: #f7f5ee;
+    border: 1px solid #e0ddd2;
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    margin: 1.2rem 0;
+  }
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+    font-size: 0.9em;
+    color: #555;
+  }
+  input[type=range] { width: 260px; accent-color: #6a9ad0; }
+  canvas {
+    display: block;
+    background: #fafafa;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin: 0 auto;
+    max-width: 100%;
+    height: auto;
+  }
+  .legend {
+    display: flex;
+    gap: 22px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: .8rem;
+    font-size: 0.85em;
+    color: #555;
+  }
+  .swatch { display: inline-block; width: 11px; height: 11px; border-radius: 50%; vertical-align: middle; margin-right: 5px; }
+</style>
+</head>
+<body>
+
+<h1>How the rectangle becomes a globe</h1>
+
+<p>The globe transition takes the same flat halftone grid every other transition uses and bends it onto a sphere. It does this in the vertex shader, per dot, with no mesh tessellation — each grid cell already has a <em>flat</em> position and a <em>sphere</em> position, and a single uniform <span class="mono">uCurl ∈ [0, 1]</span> linearly interpolates between them.</p>
+
+<aside class="note">
+The sphere itself does <strong>not</strong> rotate — the dots are pinned to fixed spots on its surface. All the motion you see comes from the <em>camera</em> swinging around the globe on a tilted orbit, which is documented separately in <span class="mono">globe-camera.html</span>. This page is only about the rectangle&nbsp;→&nbsp;sphere mapping.
+</aside>
+
+<h2>1. What "equirectangular" means</h2>
+
+<p>Equirectangular is the simplest possible way to wrap a rectangular image around a sphere: <strong>treat the image's x axis as longitude and its y axis as latitude, with both axes spaced linearly</strong>. No projection math, no area correction, no clever distortion — just a direct, proportional rename of the two axes.</p>
+
+<p>A point on a sphere of radius <span class="mono">R</span> is fully described by two angles:</p>
+<ul>
+  <li><strong>longitude</strong> <span class="mono">λ ∈ [−π, π]</span> — the angle around the vertical Y axis. <span class="mono">λ = 0</span> points at <span class="mono">+Z</span> (the camera), <span class="mono">λ = ±π</span> points at <span class="mono">−Z</span> (the back).</li>
+  <li><strong>latitude</strong> <span class="mono">φ ∈ [−π/2, π/2]</span> — the angle above or below the equator. <span class="mono">φ = 0</span> is the equator, <span class="mono">+π/2</span> is the north pole, <span class="mono">−π/2</span> is the south pole.</li>
+</ul>
+
+<p>The standard spherical-to-Cartesian formulas turn those two angles into a 3D position:</p>
+<div class="math">x = R · cos(φ) · sin(λ)
+y = R · sin(φ)
+z = R · cos(φ) · cos(λ)</div>
+
+<p>Notice the <span class="mono">cos(φ)</span> in front of both <span class="mono">x</span> and <span class="mono">z</span>: as you approach a pole, <span class="mono">cos(φ) → 0</span> and the horizontal circle of the sphere shrinks to a point. This is geometrically correct — every meridian really does meet at the pole — but it's also the source of every wart equirectangular has.</p>
+
+<h2>2. From pixel grid to (λ, φ)</h2>
+
+<p>The halftone grid has <span class="mono">cols × rows</span> cells. Equirectangular assigns each cell a longitude and latitude by linearly mapping its <em>integer</em> coordinates onto the angular ranges. The <span class="mono">+0.5</span> picks the cell's center rather than its corner:</p>
+
+<div class="math">u = (col + 0.5) / cols      ∈ (0, 1)
+v = (row + 0.5) / rows      ∈ (0, 1)
+
+λ = (u − 0.5) · 2π          ∈ (−π, π)
+φ = (v − 0.5) · π           ∈ (−π/2, π/2)</div>
+
+<p>The <span class="mono">− 0.5</span> shifts the center of the image to angle 0. Without it, <span class="mono">col = 0</span> would map to <span class="mono">λ = 0</span> (the front of the globe) and so would <span class="mono">col = cols − 1</span> (one cell shy of a full turn) — both edges of the flat image would land on the front, and during curl they would cross through each other to reach the back. With the <span class="mono">−0.5</span> shift in place, the middle column sits at the front and the two edges curl symmetrically backwards to meet at the seam.</p>
+
+<h2>3. The two structural problems, and how this transition handles them</h2>
+
+<p>Equirectangular is famous for two distortions, both unavoidable consequences of cramming a sphere onto a rectangle:</p>
+
+<p><strong>(a) Horizontal stretch near the poles.</strong> The pixel row at <span class="mono">v = 0.5</span> (the equator) covers a real-world arc of <span class="mono">2πR · cos(0) / cols = 2πR / cols</span>. The pixel row at <span class="mono">v = 0.95</span> (near a pole) covers <span class="mono">2πR · cos(0.45π) / cols ≈ 0.156 · 2πR / cols</span> — six times less ground per dot. That's why a world map drawn equirectangularly makes Greenland huge and Antarctica a band stretching the full width of the page.</p>
+
+<p>In this transition, the same stretch shows up as <em>dot crowding</em>: rows near the top and bottom of the image get squeezed into shrinking latitude circles, so their dots pile up into denser bands. The shader chooses not to fight this — no dot is culled or faded; every dot simply rides from its flat position to its sphere position. The pile-up reads cleaner than any cull-fade attempt.</p>
+
+<p><strong>(b) Pole singularity.</strong> At <span class="mono">φ = ±π/2</span> exactly, <span class="mono">cos(φ) = 0</span>, so <em>every</em> cell in that row would map to the same point — the pole — and all <span class="mono">cols</span> dots would collapse onto each other. The mapping isn't a bijection at the poles.</p>
+
+<p>This transition maps to the <strong>full</strong> latitude range and just accepts the pinch. The saving grace is the <span class="mono">+0.5</span> cell-center offset: the top row sits at <span class="mono">v = (rows − 0.5)/rows</span>, not at <span class="mono">v = 1</span>. For a 22-row grid that's <span class="mono">φ ≈ 85.9°</span>, not 90° — so <span class="mono">cos(φ) ≈ 0.07</span> rather than 0. The dots crowd into a very tight pole cap but never fully collapse onto a single point. It looks like a snug knot at each pole rather than a hard glitch.</p>
+
+
+<h2>4. Why this mapping, and not something fancier?</h2>
+
+<p>There are better sphere-onto-rectangle mappings if you care about equal area (Mollweide), equal angle (Mercator), or minimal worst-case distortion (Winkel tripel). They all involve either non-linear inverses or per-cell area weights. Equirectangular wins here for two reasons:</p>
+
+<ul>
+  <li><strong>Trivial, exact addressing.</strong> Because <span class="mono">λ</span> and <span class="mono">φ</span> are proportional to <span class="mono">col</span> and <span class="mono">row</span>, the dot at column <span class="mono">c</span>, row <span class="mono">r</span> samples its own texel directly with <span class="mono">(col + 0.5) / cols</span> and <span class="mono">(row + 0.5) / rows</span> — no resampling, no inverse projection.</li>
+  <li><strong>The grid stays the grid.</strong> The flat resting position is already a rectangular array; equirectangular treats it as a rectangular array. The <span class="mono">mix(flatPos, spherePos, uCurl)</span> blend has no gymnastics — both endpoints are addressed by the same <span class="mono">(col, row)</span>.</li>
+</ul>
+
+<h2>5. Each cell has two homes</h2>
+
+<p>In <span class="mono">transitions/globe/globe.vert.glsl</span> the shader computes both positions for the dot it's drawing, then blends:</p>
+
+<div class="math">vec3 worldCenter = mix(flatPos, spherePos, uCurl);</div>
+
+<p>The flat position is just the cell's grid coordinate centered on the origin — identical to where the resting halftone draws it. The sphere position comes from the equirectangular mapping above: column index becomes a longitude, row index becomes a latitude.</p>
+
+<div class="math">lon = ((col + 0.5) / cols − 0.5) · 2π
+lat = ((row + 0.5) / rows − 0.5) · π
+
+spherePos = uRADIUS · ( cos(lat)·sin(lon),
+                        sin(lat),
+                        cos(lat)·cos(lon) )</div>
+
+<p>The <span class="mono">−0.5</span> shift centers longitude on the <span class="mono">+Z</span> axis (the direction the camera looks at rest). So the middle column of the flat image lands on the front of the globe, and the left and right edges curl backwards to meet at the back — a poster rolling into a tube.</p>
+
+<p>There is no spin term in the longitude: the dots stay put on the sphere. Whatever rotation you perceive comes from the camera orbit, not from moving these positions.</p>
+
+<h2>6. Interactive: drag <span class="mono">uCurl</span> from 0 to 1</h2>
+
+<p>This is a stand-in camera (a simple head-on orthographic view) so you can watch the <em>mapping</em> alone — the real transition's camera is doing something more elaborate, covered in the camera explainer.</p>
+
+<div class="panel">
+  <div class="controls">
+    <label>uCurl <span id="curlVal">0.00</span></label>
+    <input type="range" id="curl" min="0" max="1" step="0.001" value="0" />
+  </div>
+  <canvas id="cv" width="780" height="400"></canvas>
+  <div class="legend">
+    <span><span class="swatch" style="background:#3a6fc4"></span>middle column → front of globe</span>
+    <span><span class="swatch" style="background:#c87432"></span>left/right edges → back of globe</span>
+    <span><span class="swatch" style="background:#3a8a4a"></span>top/bottom rows → near poles</span>
+  </div>
+</div>
+
+<h2>7. Timeline</h2>
+
+<p><span class="mono">uCurl</span> is not animated directly — the TS driver maps the normalized timeline <span class="mono">t ∈ [0, 1]</span> onto curl, the camera orbit, and the A→B flip window. The camera column below is a summary; its details live in <span class="mono">globe-camera.html</span>.</p>
+
+<table>
+<tr><th>t range</th><th>uCurl</th><th>camera orbit</th><th>image</th></tr>
+<tr><td>[0.00, 0.10]</td><td>0 → 1 (smoothstep)</td><td>easing in</td><td>A</td></tr>
+<tr><td>[0.10, 0.40]</td><td>1</td><td>orbiting</td><td>A</td></tr>
+<tr><td>[0.40, 0.60]</td><td>1</td><td>orbiting</td><td>A → B (per-dot hashed flip)</td></tr>
+<tr><td>[0.60, 0.93]</td><td>1</td><td>orbiting</td><td>B</td></tr>
+<tr><td>[0.93, 1.00]</td><td>1 → 0 (smoothstep)</td><td>easing out</td><td>B</td></tr>
+</table>
+
+<p>The curl bookends sit at <span class="mono">uCurl = 0</span> exactly, which makes the handoff into and out of the neighbouring transitions a pixel-perfect match with the resting halftone — the dots are literally on their grid cells at those instants.</p>
+
+<h2>8. Why a billboard quad, not a mesh</h2>
+
+<p>Each dot is drawn as a two-triangle quad facing the camera, not as a piece of a tessellated sphere. The vertex shader computes the dot <em>center</em> on the sphere, then offsets the four corners along the camera's right/up basis vectors. The fragment shader treats the quad coords as <span class="mono">(x, y)</span> on a unit sphere, reconstructs <span class="mono">z</span>, and uses that to fake per-pixel sphere shading. Sphere impostor in two triangles, no mesh required.</p>
+
+<script>
+  // Self-contained visualization of the lerp between flat grid and
+  // equirectangular sphere mapping. 2D-projects the 3D sphere with a
+  // simple orthographic camera at +Z. The sphere is static (no spin) and
+  // the latitude uses the full range, matching the shader.
+  const cv = document.getElementById("cv");
+  const g = cv.getContext("2d");
+  const curlEl = document.getElementById("curl");
+  const curlVal = document.getElementById("curlVal");
+
+  const COLS = 40;
+  const ROWS = 22;
+  const W = cv.width;
+  const H = cv.height;
+  const RADIUS = 155;
+  const PITCH = 8;
+
+  function draw() {
+    const curl = +curlEl.value;
+    curlVal.textContent = curl.toFixed(2);
+
+    g.fillStyle = "#fafafa";
+    g.fillRect(0, 0, W, H);
+
+    const cx = W / 2;
+    const cy = H / 2;
+    const gridW = COLS * PITCH;
+    const gridH = ROWS * PITCH;
+
+    // Sort by sphere z so back-side dots draw first.
+    const dots = [];
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS; col++) {
+        // Flat position centered on origin.
+        const flatX = (col + 0.5) * PITCH - gridW / 2;
+        const flatY = (row + 0.5) * PITCH - gridH / 2;
+
+        // Equirectangular → sphere (full latitude range, no spin).
+        const lon = ((col + 0.5) / COLS - 0.5) * 2 * Math.PI;
+        const lat = ((row + 0.5) / ROWS - 0.5) * Math.PI;
+        const cosLat = Math.cos(lat);
+        const sx = RADIUS * cosLat * Math.sin(lon);
+        const sy = RADIUS * Math.sin(lat);
+        const sz = RADIUS * cosLat * Math.cos(lon);
+
+        // Lerp.
+        const x = flatX * (1 - curl) + sx * curl;
+        const y = flatY * (1 - curl) + sy * curl;
+        const z = 0 * (1 - curl) + sz * curl;
+
+        // Color hint: tint by which region of the source rectangle the
+        // dot came from.
+        const middleness = 1 - Math.abs((col + 0.5) / COLS - 0.5) * 2;
+        const polar = Math.abs((row + 0.5) / ROWS - 0.5) * 2;
+        let r, gg, b;
+        if (polar > 0.75) { r = 0x3a; gg = 0x8a; b = 0x4a; }
+        else if (middleness > 0.6) { r = 0x3a; gg = 0x6f; b = 0xc4; }
+        else { r = 0xc8; gg = 0x74; b = 0x32; }
+
+        // Fade back-facing dots a touch so the front reads as front.
+        const facing = curl > 0.01 ? (z / RADIUS) : 1;
+        const alpha = 0.3 + 0.7 * (facing * 0.5 + 0.5);
+
+        dots.push({ x, y, z, r, gg, b, alpha });
+      }
+    }
+    dots.sort((a, b) => a.z - b.z);
+
+    for (const d of dots) {
+      g.beginPath();
+      g.fillStyle = `rgba(${d.r},${d.gg},${d.b},${d.alpha})`;
+      g.arc(cx + d.x, cy + d.y, 2.1, 0, Math.PI * 2);
+      g.fill();
+    }
+
+    g.fillStyle = "#888";
+    g.font = "11px 'SF Mono', Menlo, monospace";
+    g.fillText(`COLS×ROWS = ${COLS}×${ROWS}   uCurl = ${curl.toFixed(2)}`, 12, H - 12);
+  }
+
+  curlEl.addEventListener("input", draw);
+  draw();
+</script>
+
+</body>
+</html>

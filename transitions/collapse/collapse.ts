@@ -5,13 +5,9 @@ import {
   type RendererContext,
   type Transition,
 } from "../../renderer.ts";
+import { smoothstep } from "../../smoothstep.ts";
 import fragSrc from "./collapse.frag.glsl" with { type: "text" };
 import vertSrc from "./collapse.vert.glsl" with { type: "text" };
-
-function smoothstep(edge0: number, edge1: number, x: number): number {
-  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
-  return t * t * (3 - 2 * t);
-}
 
 const VISIT_TIME_MAX = 0.9;
 
@@ -181,7 +177,7 @@ export function createCollapseTransition(ctx: RendererContext): Transition {
         gl.bindTexture(gl.TEXTURE_2D, visitMapTex);
 
         // B-frame: fade in behind the falling A-frame (no fall, visible grid only)
-        const bOpacity = smoothstep(0.85, 1.0, t);
+        const bOpacity = smoothstep(t, [0.85, 1.0]);
         if (bOpacity > 0.001) {
           gl.uniform1f(uTime, -1000.0);
           gl.uniform1f(uOpacity, bOpacity);
