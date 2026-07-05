@@ -19,6 +19,7 @@ import { createRainTransition } from "./transitions/rain/rain.ts";
 import { createShrinkTransition } from "./transitions/shrink/shrink.ts";
 import { createTiltTransition } from "./transitions/tilt/tilt.ts";
 import { createWalkTransition } from "./transitions/walk/walk.ts";
+import { createWindTransition } from "./transitions/wind/wind.ts";
 import { createWipeTransition } from "./transitions/wipe/wipe.ts";
 
 export const CELL_SIZE = 5.0;
@@ -117,6 +118,7 @@ export class Renderer implements RendererContext {
       { name: "freefall", ...createFreefallTransition(this) },
       { name: "tilt", ...createTiltTransition(this) },
       { name: "globe", ...createGlobeTransition(this) },
+      { name: "wind", ...createWindTransition(this) },
     ];
   }
 
