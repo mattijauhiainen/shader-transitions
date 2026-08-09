@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Ball shading in anamorphosis — turning a flat square into a lit sphere</title>
+<style>
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    max-width: 820px;
+    margin: 2rem auto;
+    padding: 0 1.25rem;
+    line-height: 1.6;
+    color: #222;
+    background: #fdfdfa;
+  }
+  h1, h2, h3 { font-family: "Helvetica Neue", Arial, sans-serif; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: .3rem; }
+  h2 { margin-top: 2.4rem; border-bottom: 1px solid #ccc; padding-bottom: .2rem; }
+  h3 { margin-top: 1.6rem; }
+  code, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.95em; }
+  pre {
+    background: #f3f1ea;
+    padding: .8rem 1rem;
+    overflow-x: auto;
+    border-left: 3px solid #888;
+  }
+  figure { margin: 1.5rem auto; text-align: center; }
+  figcaption {
+    font-size: 0.9em; color: #555; margin-top: .4rem; font-style: italic;
+  }
+  svg { max-width: 100%; height: auto; }
+  .key { background: #fff7d6; padding: .1em .35em; border-radius: 3px; }
+  .bad { color: #b33; }
+  .good { color: #2a6; }
+  aside.note {
+    background: #eef4fb;
+    border-left: 3px solid #6a9ad0;
+    padding: .7rem 1rem;
+    margin: 1.2rem 0;
+    font-size: 0.95em;
+  }
+  .demo {
+    border: 1px solid #ddd;
+    background: #f7f6f1;
+    padding: 1rem;
+    margin: 1.5rem 0;
+    border-radius: 4px;
+  }
+  .demo canvas { background: #000; display: block; margin: 0 auto; max-width: 100%; }
+  .controls {
+    margin: .8rem auto 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.2rem;
+    align-items: center;
+    justify-content: center;
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-size: .9em;
+  }
+  .controls label { display: flex; gap: .5rem; align-items: center; }
+  .readout { font-family: "SF Mono", Menlo, Consolas, monospace; min-width: 3.2em; }
+  table.cases { border-collapse: collapse; margin: 1rem 0; width: 100%; }
+  table.cases td, table.cases th {
+    border: 1px solid #aaa;
+    padding: .45rem .7rem;
+    text-align: left;
+  }
+  table.cases th { background: #eee; }
+</style>
+</head>
+<body>
+
+<h1>Ball shading in anamorphosis</h1>
+
+<p>The anamorphosis transition draws each halftone dot as a flat square that always turns to face the camera — a <em>billboard</em>. Squares are cheap: two triangles, no geometry to build, no normals to store. But during the flight the camera dives straight through the field of dots, and dots go rushing past the lens from a hand's width away. At that size a flat disc of solid colour reads as a paper cut-out. What the shot wants is something with volume.</p>
+
+<p>So the fragment shader lies. It keeps drawing a flat square, and shades it as if a ball were sitting inside it. Thirteen lines of arithmetic, no extra geometry, no extra draw calls. This is how those lines work, and why each of them is shaped the way it is.</p>
+
+<h2>The square that pretends to be a ball</h2>
+
+<p>The vertex shader hands the fragment shader a coordinate called <span class="mono">vCorner</span>: where this fragment sits inside the billboard, running from <span class="mono">(-1, -1)</span> at one corner to <span class="mono">(1, 1)</span> at the other. The centre of the square is <span class="mono">(0, 0)</span>. Read those two numbers as an <span class="mono">(x, y)</span> position on a ball of radius 1, and the third coordinate follows from the fact that a point on a unit sphere is one unit from its centre:</p>
+
+<pre>float r = length(vCorner);
+float z = sqrt(max(0.0, 1.0 - r * r));</pre>
+
+<p>That is the whole geometric content of the trick. At the middle of the square <span class="mono">r = 0</span> and <span class="mono">z = 1</span>: the top of the ball, pointing straight at us. At the circle inscribed in the square <span class="mono">r = 1</span> and <span class="mono">z = 0</span>: the silhouette, where the surface has curved away until it is edge-on. In between, <span class="mono">z</span> traces the front hemisphere.</p>
+
+<figure>
+  <svg width="640" height="260" viewBox="0 0 640 260" style="background: #fafafa; border: 1px solid #ddd;">
+    <!-- left: the billboard square, face on -->
+    <text x="150" y="26" text-anchor="middle" font-size="13" font-weight="bold" fill="#333">The billboard, seen face-on</text>
+    <rect x="60" y="50" width="180" height="180" fill="#f0eee6" stroke="#999" stroke-dasharray="4,3"/>
+    <circle cx="150" cy="140" r="90" fill="none" stroke="#b34" stroke-width="1.5"/>
+    <line x1="150" y1="140" x2="213" y2="77" stroke="#2a6" stroke-width="2"/>
+    <circle cx="150" cy="140" r="3" fill="#333"/>
+    <circle cx="213" cy="77" r="3.5" fill="#2a6"/>
+    <text x="192" y="120" font-size="12" fill="#2a6" class="mono">r</text>
+    <text x="52" y="46" text-anchor="end" font-size="11" fill="#777" class="mono">(-1, 1)</text>
+    <text x="248" y="246" font-size="11" fill="#777" class="mono">(1, -1)</text>
+    <text x="150" y="252" text-anchor="middle" font-size="11" fill="#b34" class="mono">r = 1 → the silhouette</text>
+
+    <!-- right: side view, the hemisphere -->
+    <text x="450" y="26" text-anchor="middle" font-size="13" font-weight="bold" fill="#333">The same square, seen from the side</text>
+    <line x1="340" y1="200" x2="560" y2="200" stroke="#999" stroke-dasharray="4,3"/>
+    <path d="M 360 200 A 90 90 0 0 1 540 200" fill="#eef4fb" stroke="#b34" stroke-width="2"/>
+    <line x1="450" y1="200" x2="450" y2="110" stroke="#2a6" stroke-width="2"/>
+    <text x="458" y="160" font-size="12" fill="#2a6" class="mono">z</text>
+    <line x1="450" y1="200" x2="513" y2="200" stroke="#888" stroke-width="1.5"/>
+    <text x="480" y="216" font-size="12" fill="#666" class="mono">r</text>
+    <line x1="513" y1="200" x2="513" y2="136" stroke="#2a6" stroke-width="1.5" stroke-dasharray="3,3"/>
+    <circle cx="513" cy="136" r="3.5" fill="#2a6"/>
+    <text x="450" y="238" text-anchor="middle" font-size="11" fill="#555" class="mono">z = sqrt(1 - r²)</text>
+    <text x="352" y="196" text-anchor="end" font-size="11" fill="#777">camera ↑</text>
+  </svg>
+  <figcaption>The fragment's position inside the square is read as a point on a unit ball. The missing height comes straight from the Pythagorean theorem — no ball is ever built, it is recovered per pixel from two numbers the rasteriser was going to interpolate anyway.</figcaption>
+</figure>
+
+<h2>Which way is that surface facing?</h2>
+
+<p>To light the ball we need a <em>normal</em>: the direction the surface points at this pixel. On a unit sphere centred at the origin the normal is just the point itself — but the point is currently expressed in the billboard's own coordinates, and the light lives in world space. So we spell the same vector out in the camera's three axes, which are exactly the axes the billboard was built along:</p>
+
+<pre>vec3 N = normalize(vCorner.x * uCamRight + vCorner.y * uCamUp + z * uCamFwd);</pre>
+
+<p><span class="mono">uCamRight</span>, <span class="mono">uCamUp</span> and <span class="mono">uCamFwd</span> are the camera's own right, up and back-toward-the-viewer directions, written in world space — <span class="mono">anamorphosis.ts</span> reads them out of the rows of the view matrix each frame. The vertex shader used the first two to swing the square around to face the camera. The fragment shader reuses all three to swing the <em>ball</em> around to face it too.</p>
+
+<figure>
+  <svg width="600" height="230" viewBox="0 0 600 230" style="background: #fafafa; border: 1px solid #ddd;">
+    <circle cx="180" cy="130" r="80" fill="#eef4fb" stroke="#999"/>
+    <circle cx="180" cy="130" r="3" fill="#333"/>
+    <!-- basis arrows -->
+    <defs>
+      <marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+        <path d="M0,0 L8,4 L0,8 z" fill="#666"/>
+      </marker>
+      <marker id="ahg" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+        <path d="M0,0 L8,4 L0,8 z" fill="#2a6"/>
+      </marker>
+    </defs>
+    <line x1="180" y1="130" x2="270" y2="130" stroke="#666" stroke-width="1.5" marker-end="url(#ah)"/>
+    <text x="278" y="134" font-size="11" fill="#666" class="mono">uCamRight</text>
+    <line x1="180" y1="130" x2="180" y2="40" stroke="#666" stroke-width="1.5" marker-end="url(#ah)"/>
+    <text x="186" y="38" font-size="11" fill="#666" class="mono">uCamUp</text>
+    <line x1="180" y1="130" x2="122" y2="188" stroke="#666" stroke-width="1.5" marker-end="url(#ah)"/>
+    <text x="60" y="205" font-size="11" fill="#666" class="mono">uCamFwd</text>
+    <text x="24" y="220" font-size="10" fill="#999">(points back at the camera)</text>
+    <!-- normal at a surface point -->
+    <circle cx="225" cy="92" r="4" fill="#2a6"/>
+    <line x1="225" y1="92" x2="272" y2="45" stroke="#2a6" stroke-width="2" marker-end="url(#ahg)"/>
+    <text x="278" y="42" font-size="12" fill="#2a6" class="mono">N</text>
+
+    <text x="440" y="70" text-anchor="middle" font-size="13" fill="#333">On a unit sphere at the origin,</text>
+    <text x="440" y="92" text-anchor="middle" font-size="13" fill="#333">the normal <em>is</em> the surface point.</text>
+    <text x="440" y="130" text-anchor="middle" font-size="12" fill="#555">So the three impostor coordinates</text>
+    <text x="440" y="150" text-anchor="middle" font-size="12" fill="#555">become three world-space steps,</text>
+    <text x="440" y="170" text-anchor="middle" font-size="12" fill="#555">one along each camera axis.</text>
+  </svg>
+  <figcaption>The normal is assembled directly out of the camera basis. Nothing is stored per dot and nothing is transformed by a matrix — three uniform vectors, scaled and added.</figcaption>
+</figure>
+
+<p>Two details in that one line are worth pausing on.</p>
+
+<p><strong>The sign of <span class="mono">uCamFwd</span>.</strong> Despite the name it points from the scene <em>back toward</em> the camera, because that is the convention the view matrix stores (the camera's local <span class="mono">+z</span> is behind it, looking down <span class="mono">-z</span>). That is what we want here: the <span class="mono">z</span> we computed is the height of the <em>front</em> hemisphere, the half facing us, so it has to be laid off in the direction of the viewer. Flip that sign and every ball would be lit as if seen from behind.</p>
+
+<p><strong>The <span class="mono">normalize</span>.</strong> On the unit disc the assembled vector already has length 1, so the call looks redundant. It is not, because the billboard is deliberately a little larger than the ball: the vertex shader inflates the quad by half a pixel of headroom so the anti-aliased rim has somewhere to fade out, and passes on <span class="mono">vCorner = aPosition * scale</span>. In that outer sliver <span class="mono">r &gt; 1</span>, the <span class="mono">max(0.0, …)</span> clamps <span class="mono">z</span> to zero, and the vector is a sideways one of length <span class="mono">r</span>. Normalising keeps it a legal direction. Those fragments are all inside the fading edge anyway, and most of them are discarded a line earlier.</p>
+
+<h2>A lamp bolted to the lens</h2>
+
+<pre>float diffuse = max(0.0, dot(N, vToCam));
+float lit = 0.3 + 0.7 * diffuse;</pre>
+
+<p><span class="mono">vToCam</span> is the unit direction from this dot's centre to the camera, computed once per dot in the vertex shader. Using it as the light direction puts the lamp exactly where the viewer is — a <em>headlight</em>. The dot product then measures how squarely each patch of surface faces us: 1 at the middle of the ball, sliding to 0 at the silhouette, which is Lambert's cosine law with the angle already baked into the vectors.</p>
+
+<p>A headlight is a specific artistic choice, and it is the right one here for two reasons. It never puts a dot in shadow — every ball on screen keeps its own colour and stays legible as a halftone sample of the photograph, which the whole picture depends on. And it needs no light position to animate, so nothing about the shading has to be kept in sync with the flight path.</p>
+
+<p>The <span class="mono">0.3 +</span> is an ambient floor. Without it the silhouette goes to pure black, and against the black background that reads as the dot simply being <em>smaller</em> rather than round — the rim disappears instead of turning away. Three tenths is enough to keep the edge present while leaving most of the range for the falloff.</p>
+
+<figure>
+  <svg width="620" height="220" viewBox="0 0 620 220" style="background: #fafafa; border: 1px solid #ddd;">
+    <defs>
+      <radialGradient id="ballgrad" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#ffb066"/>
+        <stop offset="55%" stop-color="#d1793a"/>
+        <stop offset="100%" stop-color="#4b2a14"/>
+      </radialGradient>
+    </defs>
+    <circle cx="120" cy="115" r="80" fill="url(#ballgrad)"/>
+    <text x="120" y="212" text-anchor="middle" font-size="12" fill="#555" font-style="italic">the resulting ball</text>
+
+    <g transform="translate(280,40)">
+      <line x1="0" y1="120" x2="290" y2="120" stroke="#888"/>
+      <line x1="0" y1="0" x2="0" y2="130" stroke="#888"/>
+      <!-- lit curve: 0.3 + 0.7*sqrt(1-r^2) mapped across -->
+      <path d="M 0 36 L 15 37 L 30 39 L 45 42 L 60 46 L 75 51 L 90 57 L 105 64 L 120 72 L 135 82 L 145 120"
+            fill="none" stroke="#b34" stroke-width="2" transform="translate(145,0)"/>
+      <path d="M 290 36 L 275 37 L 260 39 L 245 42 L 230 46 L 215 51 L 200 57 L 185 64 L 170 72 L 155 82 L 145 120"
+            fill="none" stroke="#b34" stroke-width="2"/>
+      <line x1="0" y1="120" x2="290" y2="120" stroke="#ddd"/>
+      <line x1="0" y1="95" x2="290" y2="95" stroke="#6a9ad0" stroke-dasharray="4,3"/>
+      <text x="-6" y="40" text-anchor="end" font-size="11" fill="#555" class="mono">1.0</text>
+      <text x="-6" y="99" text-anchor="end" font-size="11" fill="#6a9ad0" class="mono">0.3</text>
+      <text x="-6" y="124" text-anchor="end" font-size="11" fill="#555" class="mono">0.0</text>
+      <text x="145" y="146" text-anchor="middle" font-size="11" fill="#555">centre</text>
+      <text x="290" y="146" text-anchor="end" font-size="11" fill="#555">silhouette</text>
+      <text x="0" y="146" font-size="11" fill="#555">silhouette</text>
+      <text x="145" y="170" text-anchor="middle" font-size="12" fill="#555" font-style="italic">brightness across the dot</text>
+      <text x="200" y="88" font-size="11" fill="#6a9ad0">ambient floor</text>
+    </g>
+  </svg>
+  <figcaption>Brightness follows the cosine of the surface angle, lifted so it never reaches zero. The steep drop right at the rim is what the eye reads as curvature.</figcaption>
+</figure>
+
+<aside class="note">
+<strong>A free perspective cue.</strong> The normal is built in the camera basis, which is the same for every dot on screen, but it is lit against <span class="mono">vToCam</span>, which is <em>per dot</em>. For a dot dead ahead the two agree and the highlight sits in the middle. For a dot out at the edge of a wide frame the direction home is tilted by up to half the field of view, and the highlight slides toward the centre of the screen — exactly as it would on real balls lit from the viewer's position. It costs nothing; it falls out of using the honest direction rather than reusing <span class="mono">uCamFwd</span> for both jobs.
+</aside>
+
+<h2>Try it</h2>
+
+<p>The demo below runs the real shader arithmetic, one pixel at a time, on a canvas. <em>Shading</em> is the <span class="mono">uSphereShading</span> uniform from the next section; <em>angle to camera</em> tilts <span class="mono">vToCam</span> away from <span class="mono">uCamFwd</span>, which is what happens to a dot sitting out toward the edge of the frame.</p>
+
+<div class="demo">
+  <canvas id="ballCanvas" width="280" height="280"></canvas>
+  <div class="controls">
+    <label>shading
+      <input id="shadeSlider" type="range" min="0" max="1" step="0.01" value="1" />
+      <span class="readout" id="shadeOut">1.00</span>
+    </label>
+    <label>angle to camera
+      <input id="axisSlider" type="range" min="-40" max="40" step="1" value="0" />
+      <span class="readout" id="axisOut">0°</span>
+    </label>
+    <label><input id="normalsBox" type="checkbox" /> show N as colour</label>
+  </div>
+</div>
+
+<p>At real dot sizes it is far subtler — the shading is not there to be looked at, it is there to make a rushing swarm read as solid. Same maths, same sliders, on a patch of halftone:</p>
+
+<div class="demo">
+  <canvas id="gridCanvas" width="760" height="220"></canvas>
+  <div class="controls">
+    <label>shading
+      <input id="gridShadeSlider" type="range" min="0" max="1" step="0.01" value="1" />
+      <span class="readout" id="gridShadeOut">1.00</span>
+    </label>
+    <label>dot size
+      <input id="gridSizeSlider" type="range" min="4" max="26" step="1" value="14" />
+      <span class="readout" id="gridSizeOut">14 px</span>
+    </label>
+  </div>
+</div>
+
+<h2>Turning the whole thing off at the bookends</h2>
+
+<p>Anamorphosis begins and ends parked at a standstill, at the exact spot where the field of dots collapses back into the ordinary flat halftone. The slides on either side of the transition draw that halftone with flat discs. If the transition's first and last frames were shaded balls, the handover would pop.</p>
+
+<pre>float intensity = mix(1.0, lit, uSphereShading);</pre>
+
+<p>At <span class="mono">uSphereShading = 0</span> the intensity is a flat 1 and the dot is a solid disc of its own colour, pixel-identical to what the neighbouring transitions draw. At 1 it is the full ball. <span class="mono">anamorphosis.ts</span> ramps it up over the first 5% of the transition and back down over the last 5%:</p>
+
+<pre>if (t &lt; 0.05) sphereShading = t / 0.05;
+else if (t &gt; 0.95) sphereShading = (1 - t) / 0.05;
+else sphereShading = 1;</pre>
+
+<p>By the time the shading is fully on, the camera has already started moving and the dots have started to separate in depth, so the ramp hides inside motion that is drawing the eye anyway. This is the same discipline the rest of the transition follows: the flight's easing parks the camera at both ends, and the anti-aliasing is computed in screen pixels so the rims match too. Every property that differs from the resting halftone has to be brought back to it before the last frame.</p>
+
+<table class="cases">
+<tr><th><span class="mono">uSphereShading</span></th><th>What a dot looks like</th><th>When</th></tr>
+<tr><td>0</td><td>flat disc of solid colour</td><td>first and last frame — matches the neighbouring slides</td></tr>
+<tr><td>0 → 1</td><td>volume fading in</td><td>first 5% / last 5%, under cover of camera movement</td></tr>
+<tr><td>1</td><td>fully shaded ball</td><td>the flight itself</td></tr>
+</table>
+
+<h2>The last line</h2>
+
+<pre>fragColor = vec4(vColor.rgb * intensity * alpha, alpha);</pre>
+
+<p>Three things are multiplied together here. <span class="mono">intensity</span> is the shading we just built. <span class="mono">alpha</span> is coverage: the anti-aliased rim, computed a few lines earlier in screen pixels so that a dot's edge is feathered over exactly one pixel however big it is on screen, times <span class="mono">vFade</span>, the opacity of the image this dot belongs to (image B fades up once the camera is through image A).</p>
+
+<p>Multiplying the colour by its own alpha makes the output <em>premultiplied</em>, which is why <span class="mono">anamorphosis.ts</span> pairs the shader with:</p>
+
+<pre>gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);</pre>
+
+<p>The usual <span class="mono">SRC_ALPHA, ONE_MINUS_SRC_ALPHA</span> would have the blender apply the coverage, but the shader is already scaling the colour by two factors and the fade is a third; doing the multiply here keeps all of them in one place and keeps overlapping rims composing correctly rather than each re-weighting a colour that was already weighted.</p>
+
+<h2>What this deliberately does not do</h2>
+
+<ul>
+  <li><strong>It does not move the fragment's depth.</strong> The impostor is shaded like a ball but occupies the depth of a flat billboard, so where two dots interpenetrate they still sort as discs. Writing <span class="mono">gl_FragDepth</span> would fix that and cost the early-z rejection of every dot on screen — a bad trade for dots that are a few pixels across and rarely intersect.</li>
+  <li><strong>There is no specular highlight.</strong> A headlight specular would sit dead centre on every ball at once and read as a field of identical white pips, flattening the very thing the shading is for.</li>
+  <li><strong>The balls do not shade each other.</strong> No shadows, no ambient occlusion. At a hundred thousand dots per frame the point of the impostor is that it is nearly free.</li>
+</ul>
+
+<h2>Summary</h2>
+
+<ol>
+  <li>Read the billboard coordinate <span class="mono">vCorner</span> as a point on a unit ball and recover the missing height with <span class="mono">z = sqrt(1 - r²)</span>. That is the impostor.</li>
+  <li>Spell that point out in the camera's own axes to get a world-space normal — no per-dot data, three uniforms.</li>
+  <li>Light it from the camera's position. Cosine falloff over an ambient floor of 0.3, so rims turn away instead of vanishing.</li>
+  <li><span class="mono">mix(1.0, lit, uSphereShading)</span> lets the whole effect be faded out at both ends, so the transition hands back the same flat halftone it was given.</li>
+  <li>Multiply by coverage on the way out, because the draw is set up for premultiplied alpha.</li>
+</ol>
+
+<script>
+(function () {
+  function smoothstepDown(e0, e1, x) {
+    // smoothstep(edge0, edge1, x) with edge0 > edge1, as GLSL allows.
+    let t = (x - e0) / (e1 - e0);
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    return t * t * (3 - 2 * t);
+  }
+
+  // One dot's worth of the fragment shader, in JS. cornerX/cornerY are vCorner,
+  // toCam is the unit direction from the dot's centre to the camera expressed in
+  // the camera's own basis (so uCamRight/Up/Fwd are the identity here).
+  function shade(cornerX, cornerY, radiusPx, toCam, shading) {
+    const r = Math.hypot(cornerX, cornerY);
+    const distPx = r * radiusPx;
+    const alpha = smoothstepDown(radiusPx + 0.5, radiusPx - 0.5, distPx);
+    if (alpha <= 0) return null;
+
+    const z = Math.sqrt(Math.max(0, 1 - r * r));
+    const len = Math.hypot(cornerX, cornerY, z) || 1;
+    const nx = cornerX / len, ny = cornerY / len, nz = z / len;
+
+    const diffuse = Math.max(0, nx * toCam[0] + ny * toCam[1] + nz * toCam[2]);
+    const lit = 0.3 + 0.7 * diffuse;
+    return { alpha, intensity: 1 + (lit - 1) * shading, n: [nx, ny, nz] };
+  }
+
+  // --- Demo 1: one big ball -------------------------------------------------
+  const ballCanvas = document.getElementById("ballCanvas");
+  const bctx = ballCanvas.getContext("2d");
+  const shadeSlider = document.getElementById("shadeSlider");
+  const axisSlider = document.getElementById("axisSlider");
+  const shadeOut = document.getElementById("shadeOut");
+  const axisOut = document.getElementById("axisOut");
+  const normalsBox = document.getElementById("normalsBox");
+  const BASE = [235, 140, 70];
+
+  function drawBall() {
+    const w = ballCanvas.width, h = ballCanvas.height;
+    const shading = parseFloat(shadeSlider.value);
+    const deg = parseFloat(axisSlider.value);
+    const showNormals = normalsBox.checked;
+    shadeOut.textContent = shading.toFixed(2);
+    axisOut.textContent = deg + "°";
+
+    const rad = (deg * Math.PI) / 180;
+    const toCam = [Math.sin(rad), 0, Math.cos(rad)];
+
+    const img = bctx.createImageData(w, h);
+    const data = img.data;
+    const cx = w / 2, cy = h / 2, radiusPx = 118;
+
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        // +0.5 for the pixel centre; y flipped so up is up.
+        const cornerX = (x + 0.5 - cx) / radiusPx;
+        const cornerY = -(y + 0.5 - cy) / radiusPx;
+        const s = shade(cornerX, cornerY, radiusPx, toCam, shading);
+        const i = (y * w + x) * 4;
+        data[i + 3] = 255;
+        if (!s) continue;
+        let r, g, b;
+        if (showNormals) {
+          r = (s.n[0] * 0.5 + 0.5) * 255;
+          g = (s.n[1] * 0.5 + 0.5) * 255;
+          b = (s.n[2] * 0.5 + 0.5) * 255;
+        } else {
+          r = BASE[0] * s.intensity;
+          g = BASE[1] * s.intensity;
+          b = BASE[2] * s.intensity;
+        }
+        // Premultiplied source over a black background.
+        data[i] = r * s.alpha;
+        data[i + 1] = g * s.alpha;
+        data[i + 2] = b * s.alpha;
+      }
+    }
+    bctx.putImageData(img, 0, 0);
+  }
+
+  // --- Demo 2: a patch of halftone -----------------------------------------
+  const gridCanvas = document.getElementById("gridCanvas");
+  const gctx = gridCanvas.getContext("2d");
+  const gridShadeSlider = document.getElementById("gridShadeSlider");
+  const gridSizeSlider = document.getElementById("gridSizeSlider");
+  const gridShadeOut = document.getElementById("gridShadeOut");
+  const gridSizeOut = document.getElementById("gridSizeOut");
+  // Stands in for the focal length: how far the virtual camera sits in front of
+  // the patch, in pixels. Short enough that the off-axis tilt is visible.
+  const FOCAL = 520;
+
+  // A smooth field of "luminance" so the dots vary in size like a photograph.
+  function luma(u, v) {
+    const a = Math.sin(u * 5.1 + 0.7) * Math.cos(v * 3.3 - 0.4);
+    const b = Math.sin((u + v) * 2.2 + 1.9);
+    return Math.min(1, Math.max(0.05, 0.5 + 0.32 * a + 0.18 * b));
+  }
+
+  function hueFor(u, v) {
+    const t = 0.5 + 0.5 * Math.sin(u * 2.6 + v * 1.4);
+    return [
+      120 + 135 * t,
+      110 + 90 * (1 - t) + 30 * t,
+      90 + 150 * (1 - t),
+    ];
+  }
+
+  function drawGrid() {
+    const w = gridCanvas.width, h = gridCanvas.height;
+    const shading = parseFloat(gridShadeSlider.value);
+    const pitch = parseFloat(gridSizeSlider.value);
+    gridShadeOut.textContent = shading.toFixed(2);
+    gridSizeOut.textContent = pitch + " px";
+
+    const img = gctx.createImageData(w, h);
+    const data = img.data;
+    for (let i = 3; i < data.length; i += 4) data[i] = 255;
+
+    const cols = Math.ceil(w / pitch), rows = Math.ceil(h / pitch);
+    const cx = w / 2, cy = h / 2;
+
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const px = (col + 0.5) * pitch;
+        const py = (row + 0.5) * pitch;
+        const u = col / cols * 6, v = row / rows * 3;
+        // sqrt, same as the vertex shader: dot area tracks luminance.
+        const radiusPx = Math.sqrt(luma(u, v)) * pitch * 0.46;
+        const rgb = hueFor(u, v);
+
+        // Direction from this dot back to the camera, in the camera's basis.
+        // The y term is already flipped: screen y grows downward, the basis'
+        // up axis grows upward.
+        const dx = -(px - cx), dy = py - cy;
+        const len = Math.hypot(dx, dy, FOCAL);
+        const toCam = [dx / len, dy / len, FOCAL / len];
+
+        const span = Math.ceil(radiusPx + 1.5);
+        for (let y = Math.floor(py - span); y <= py + span; y++) {
+          if (y < 0 || y >= h) continue;
+          for (let x = Math.floor(px - span); x <= px + span; x++) {
+            if (x < 0 || x >= w) continue;
+            const cornerX = (x + 0.5 - px) / radiusPx;
+            const cornerY = -(y + 0.5 - py) / radiusPx;
+            const s = shade(cornerX, cornerY, radiusPx, toCam, shading);
+            if (!s) continue;
+            const i = (y * w + x) * 4;
+            data[i] += rgb[0] * s.intensity * s.alpha;
+            data[i + 1] += rgb[1] * s.intensity * s.alpha;
+            data[i + 2] += rgb[2] * s.intensity * s.alpha;
+          }
+        }
+      }
+    }
+    gctx.putImageData(img, 0, 0);
+  }
+
+  for (const el of [shadeSlider, axisSlider, normalsBox]) {
+    el.addEventListener("input", drawBall);
+  }
+  for (const el of [gridShadeSlider, gridSizeSlider]) {
+    el.addEventListener("input", drawGrid);
+  }
+  drawBall();
+  drawGrid();
+})();
+</script>
+
+</body>
+</html>

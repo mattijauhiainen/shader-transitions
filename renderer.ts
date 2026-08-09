@@ -6,6 +6,7 @@ import fullscreenQuadVert from "./fullscreenQuad.vert.glsl" with {
 };
 import { LUMA } from "./luma.ts";
 import lumaRangesFrag from "./lumaRanges.frag.glsl" with { type: "text" };
+import { createAnamorphosisTransition } from "./transitions/anamorphosis/anamorphosis.ts";
 import { createCollapseTransition } from "./transitions/collapse/collapse.ts";
 import { createExplodeTransition } from "./transitions/explode/explode.ts";
 import { createFreefallTransition } from "./transitions/freefall/freefall.ts";
@@ -119,6 +120,7 @@ export class Renderer implements RendererContext {
       { name: "tilt", ...createTiltTransition(this) },
       { name: "globe", ...createGlobeTransition(this) },
       { name: "wind", ...createWindTransition(this) },
+      { name: "anamorphosis", ...createAnamorphosisTransition(this) },
     ];
   }
 

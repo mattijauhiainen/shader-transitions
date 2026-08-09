@@ -1,4 +1,5 @@
 import { readdirSync } from "node:fs";
+import { join } from "node:path";
 
 // Generate images.json for dev
 const images = readdirSync("./images")
@@ -19,6 +20,34 @@ const CONTENT_TYPES: Record<string, string> = {
   ".webp": "image/webp",
 };
 
+// Every explainer under ./explainers, as paths relative to that directory.
+function listExplainers(dir = "explainers"): string[] {
+  return readdirSync(dir, { withFileTypes: true })
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .flatMap((entry) =>
+      entry.isDirectory()
+        ? listExplainers(join(dir, entry.name))
+        : entry.name.endsWith(".html")
+          ? [join(dir, entry.name)]
+          : [],
+    );
+}
+
+// The explainers are plain static HTML the server already serves by path; this
+// index just saves having to remember their filenames.
+function explainerIndex(): string {
+  const items = listExplainers()
+    .map((path) => `<li><a href="/${path}">${path.slice("explainers/".length)}</a></li>`)
+    .join("\n");
+  return `<!doctype html>
+<meta charset="utf-8" />
+<title>Explainers</title>
+<h1>Explainers</h1>
+<ul>
+${items}
+</ul>`;
+}
+
 const server = Bun.serve({
   port: 4000,
   async fetch(req) {
@@ -27,6 +56,12 @@ const server = Bun.serve({
 
     if (path === "/" || path === "/index.html") {
       return new Response(Bun.file("index.html"), {
+        headers: { "Content-Type": "text/html" },
+      });
+    }
+
+    if (path === "/explainers" || path === "/explainers/") {
+      return new Response(explainerIndex(), {
         headers: { "Content-Type": "text/html" },
       });
     }
