@@ -69,8 +69,8 @@ void main() {
     float screenRadius = radius * perspScale;
     float outerScreenRadius = screenRadius + 0.5;
 
-    vec2 screenCenter = uVIEWPORT * 0.5;
-    vec2 projected = camSpace.xy * perspScale + screenCenter;
+    // Project about the grid center so dots land on the halftone's pixel grid.
+    vec2 projected = camSpace.xy * perspScale + gridCenter;
 
     vec2 billboard = aPosition * outerScreenRadius;
     vec2 screen = projected + billboard;
