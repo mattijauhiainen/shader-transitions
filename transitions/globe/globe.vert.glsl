@@ -10,7 +10,7 @@ uniform sampler2D uCELL_COLORS_B;
 uniform sampler2D uLUMA_RANGE_A;
 uniform sampler2D uLUMA_RANGE_B;
 uniform vec2 uGRID_SIZE;
-uniform float uCELL_SIZE;
+uniform float uDOT_SIZE;
 uniform float uPITCH;
 uniform vec3 uLUMA;
 uniform float uFOCAL_PX;
@@ -102,7 +102,7 @@ void main() {
             (dot(color.rgb, uLUMA) - range.r) / (range.g - range.r),
             0.0, 1.0
         );
-    float radius = sqrt(normLuma) * uCELL_SIZE * 0.5;
+    float radius = sqrt(normLuma) * uDOT_SIZE * 0.5;
 
     // Scale the impostor quad by ~half a screen pixel of headroom so the
     // fragment shader's smoothstep can fade cleanly to zero.

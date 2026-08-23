@@ -9,7 +9,7 @@ uniform sampler2D uLUMA_RANGE_B;
 
 uniform vec2 uGRID_SIZE;         // grid dimensions (cols, rows)
 
-uniform float uCELL_SIZE;
+uniform float uDOT_SIZE;
 uniform float uPITCH;
 uniform vec3 uLUMA;
 uniform float uTime;                // transition progress 0..1
@@ -34,8 +34,8 @@ void main() {
   float normB = (dot(colorB.rgb, uLUMA) - rangeB.r) / (rangeB.g - rangeB.r);
 
   // Natural radii for each frame
-  float rA = sqrt(normA) * uCELL_SIZE * 0.5;
-  float rB = sqrt(normB) * uCELL_SIZE * 0.5;
+  float rA = sqrt(normA) * uDOT_SIZE * 0.5;
+  float rB = sqrt(normB) * uDOT_SIZE * 0.5;
 
   // Interpolate between radii with overshoot
   float t = uTime;

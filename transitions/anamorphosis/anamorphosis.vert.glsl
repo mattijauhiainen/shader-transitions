@@ -15,7 +15,7 @@ uniform sampler2D uLUMA_RANGE_A;
 uniform sampler2D uLUMA_RANGE_B;
 uniform vec2 uGRID_SIZE;
 // Dot diameter at full luma, in world units (less than uPITCH).
-uniform float uCELL_SIZE;
+uniform float uDOT_SIZE;
 // World-space spacing between cell centers.
 uniform float uPITCH;
 // Weights to calculate luma for a given RGB color.
@@ -176,7 +176,7 @@ void main() {
             (dot(color.rgb, uLUMA) - range.r) / (range.g - range.r),
             0.0, 1.0
         );
-    float radius = sqrt(normLuma) * uCELL_SIZE * 0.5 * depth;
+    float radius = sqrt(normLuma) * uDOT_SIZE * 0.5 * depth;
 
     // Antialiasing. Project the dot's centre to find how far from the camera it
     // is (that is what w comes out as), turn that into a radius in pixels, then

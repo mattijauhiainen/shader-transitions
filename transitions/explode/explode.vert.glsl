@@ -5,7 +5,7 @@ uniform sampler2D uCELL_COLORS;
 uniform sampler2D uLUMA_RANGE;
 uniform vec2 uGRID_SIZE;
 
-uniform float uCELL_SIZE;
+uniform float uDOT_SIZE;
 uniform float uPITCH;
 uniform vec3 uLUMA;
 uniform vec2 uVIEWPORT;
@@ -35,7 +35,7 @@ void main() {
   float normalizedLuma = clamp(
     (dot(color.rgb, uLUMA) - range.r) / (range.g - range.r),
     0.0, 1.0);
-  float radius = sqrt(normalizedLuma) * uCELL_SIZE * 0.5;
+  float radius = sqrt(normalizedLuma) * uDOT_SIZE * 0.5;
 
   vec2 cellCenter = (cellCoord + 0.5) * uPITCH;
   vec2 offset = vec2(0.0);

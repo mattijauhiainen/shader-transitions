@@ -8,7 +8,7 @@ uniform sampler2D uCELL_COLORS_B;
 uniform sampler2D uLUMA_RANGE_B;
 uniform vec2 uGRID_SIZE;
 uniform vec2 uVIEWPORT;
-uniform float uCELL_SIZE;
+uniform float uDOT_SIZE;
 uniform float uPITCH;
 uniform vec3 uLUMA;
 uniform float uFOCAL_LEN;
@@ -44,7 +44,7 @@ float halftoneRadius(vec4 color, vec2 range) {
     float normLuma = clamp(
             (dot(color.rgb, uLUMA) - range.r) / (range.g - range.r),
             0.0, 1.0);
-    return sqrt(normLuma) * uCELL_SIZE * 0.5;
+    return sqrt(normLuma) * uDOT_SIZE * 0.5;
 }
 
 // Perspective depth range for the NDC mapping, derived from focal length so the

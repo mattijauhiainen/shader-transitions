@@ -20,7 +20,7 @@ uniform vec2 uGRID_SIZE;
 uniform float uTime;
 uniform float uLevelDuration;
 
-uniform float uCELL_SIZE;
+uniform float uDOT_SIZE;
 uniform float uPITCH;
 uniform vec3 uLUMA;
 // Number of ascent levels. Also the boundary in the timing texture
@@ -118,7 +118,7 @@ void main() {
   /*
    * Now we have level, mergeT, and colorBlend. Rendering works in three stages:
    *
-   * 1. Grid geometry — from level, derive the scale, pitch, and cell size
+   * 1. Grid geometry — from level, derive the scale, pitch, and dot size
    *    at this mip level. Find which 2x2 group this pixel belongs to.
    *
    * 2. Merge target — the 4 children are merging into a parent cell one
@@ -127,7 +127,7 @@ void main() {
    *    the coarser mip level, then blend between them using colorBlend
    *    to get the actual target color. Convert that color to luminance,
    *    normalize using the blended luma range, and derive the target
-   *    radius via sqrt(normLuma) * cellSize.
+   *    radius via sqrt(normLuma) * dotSize.
    *
    * 3. Per-child metaball — for each of the 4 children in the group:
    *    a. Sample both A and B frame colors at the current mip level,
@@ -151,7 +151,7 @@ void main() {
   // Scale grid dimensions to the current mip level
   float scale = pow(2.0, level);
   float currentPitch = uPITCH * scale;
-  float currentCellSize = uCELL_SIZE * scale;
+  float currentDotSize = uDOT_SIZE * scale;
 
   // Which 2x2 group does this pixel belong to, and where does it merge?
   vec2 groupCoord = floor(gl_FragCoord.xy / (currentPitch * 2.0));
@@ -170,7 +170,7 @@ void main() {
     (dot(mergedColor.rgb, uLUMA) - lumaRange.r) / (lumaRange.g - lumaRange.r),
     0.0, 1.0
   );
-  float mergedRadius = sqrt(mergedNormLuma) * currentCellSize;
+  float mergedRadius = sqrt(mergedNormLuma) * currentDotSize;
 
   // --- Stage 3: Per-child metaball ---
   // We use a metaball field to render the dots. The field function
@@ -200,7 +200,7 @@ void main() {
         (dot(color.rgb, uLUMA) - lumaRange.r) / (lumaRange.g - lumaRange.r),
         0.0, 1.0
       );
-      float childRadius = sqrt(normLuma) * currentCellSize * 0.5;
+      float childRadius = sqrt(normLuma) * currentDotSize * 0.5;
 
       // 3b: Blend radius and color toward the merge target
       float radius = mix(childRadius, mergedRadius, mergeT) / sqrt(1.0 + 3.0 * mergeT);

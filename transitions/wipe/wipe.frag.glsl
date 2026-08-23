@@ -6,7 +6,7 @@ uniform sampler2D uCELL_COLORS_B;
 uniform sampler2D uLUMA_RANGE_B;
 uniform vec2 uGRID_SIZE;
 
-uniform float uCELL_SIZE;
+uniform float uDOT_SIZE;
 uniform float uPITCH;
 uniform vec3 uLUMA;
 uniform float uTime;
@@ -32,14 +32,14 @@ void main() {
   float scaleA = clamp(grad / 0.4, 0.0, 1.0);
   float scaleB = clamp((1.0 - grad) / 0.4, 0.0, 1.0);
 
-  float radiusA = sqrt(normA) * uCELL_SIZE * 0.5 * scaleA;
+  float radiusA = sqrt(normA) * uDOT_SIZE * 0.5 * scaleA;
   float alphaA = smoothstep(radiusA + 0.5, radiusA - 0.5, dist);
 
   vec4 colorB = texture(uCELL_COLORS_B, uv);
   vec2 rangeB = texture(uLUMA_RANGE_B, vec2(0.5)).rg;
   float normB = (dot(colorB.rgb, uLUMA) - rangeB.r) / (rangeB.g - rangeB.r);
 
-  float radiusB = sqrt(normB) * uCELL_SIZE * 0.5 * scaleB;
+  float radiusB = sqrt(normB) * uDOT_SIZE * 0.5 * scaleB;
   float alphaB = smoothstep(radiusB + 0.5, radiusB - 0.5, dist);
 
   vec4 bg = vec4(0.0, 0.0, 0.0, 1.0);

@@ -1,7 +1,7 @@
 import { LUMA } from "../../luma.ts";
 import * as mat4 from "../../mat4.ts";
 import {
-  CELL_SIZE,
+  DOT_SIZE,
   PITCH,
   type RendererContext,
   type Transition,
@@ -9,6 +9,7 @@ import {
 import { smoothstep } from "../../smoothstep.ts";
 import fragSrc from "./anamorphosis.frag.glsl" with { type: "text" };
 import vertSrc from "./anamorphosis.vert.glsl" with { type: "text" };
+
 /*
 * Anamorphosis transition. Anamorphosis means the image is distorted in a way
 * that when viewed from a certain angle, it looks normal, but when viewed from
@@ -36,7 +37,7 @@ const DEPTH_FAR = 20.0;
 // How far behind image A image B sits, counted in resting-camera distances D.
 const IMAGE_GAP = 42.0;
 
-const TURN_START = 0.50;
+const TURN_START = 0.5;
 const TURN_END = 0.85;
 const FADE_A_OUT: [number, number] = [0.5, 0.62];
 const FADE_B_IN: [number, number] = [0.38, 0.52];
@@ -54,7 +55,7 @@ export function createAnamorphosisTransition(ctx: RendererContext): Transition {
     ctx.cols,
     ctx.rows,
   );
-  gl.uniform1f(gl.getUniformLocation(program, "uCELL_SIZE"), CELL_SIZE);
+  gl.uniform1f(gl.getUniformLocation(program, "uDOT_SIZE"), DOT_SIZE);
   gl.uniform1f(gl.getUniformLocation(program, "uPITCH"), PITCH);
   gl.uniform1f(gl.getUniformLocation(program, "uFOCAL_PX"), focalLen);
   gl.uniform3f(

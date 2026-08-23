@@ -2,7 +2,7 @@ import { clamp } from "../../clamp.ts";
 import { LUMA } from "../../luma.ts";
 import * as mat4 from "../../mat4.ts";
 import {
-  CELL_SIZE,
+  DOT_SIZE,
   PITCH,
   type RendererContext,
   type Transition,
@@ -53,7 +53,7 @@ export function createGlobeTransition(ctx: RendererContext): Transition {
     ctx.cols,
     ctx.rows,
   );
-  gl.uniform1f(gl.getUniformLocation(program, "uCELL_SIZE"), CELL_SIZE);
+  gl.uniform1f(gl.getUniformLocation(program, "uDOT_SIZE"), DOT_SIZE);
   gl.uniform1f(gl.getUniformLocation(program, "uPITCH"), PITCH);
   gl.uniform1f(gl.getUniformLocation(program, "uFOCAL_PX"), focalLen);
   gl.uniform1f(gl.getUniformLocation(program, "uRADIUS"), radius);

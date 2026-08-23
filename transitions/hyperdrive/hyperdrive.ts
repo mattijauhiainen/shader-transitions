@@ -1,6 +1,6 @@
 import { LUMA } from "../../luma.ts";
 import {
-  CELL_SIZE,
+  DOT_SIZE,
   PITCH,
   type RendererContext,
   type Transition,
@@ -27,7 +27,7 @@ export function createHyperdriveTransition(ctx: RendererContext): Transition {
     ctx.canvasWidth,
     ctx.canvasHeight,
   );
-  gl.uniform1f(gl.getUniformLocation(program, "uCELL_SIZE"), CELL_SIZE);
+  gl.uniform1f(gl.getUniformLocation(program, "uDOT_SIZE"), DOT_SIZE);
   gl.uniform1f(gl.getUniformLocation(program, "uPITCH"), PITCH);
   gl.uniform3f(
     gl.getUniformLocation(program, "uLUMA"),
@@ -234,7 +234,7 @@ export function createHyperdriveTransition(ctx: RendererContext): Transition {
           if (depth < NEAR_CLIP || depth > farDist) continue;
 
           // Skip planes whose largest dot would be < 1 screen pixel
-          const maxScreenRadius = (CELL_SIZE * 0.5 * focalLen) / depth;
+          const maxScreenRadius = (DOT_SIZE * 0.5 * focalLen) / depth;
           if (maxScreenRadius < 0.5) continue;
 
           // Depth-based fade: planes near the far edge of the visible

@@ -5,7 +5,7 @@ precision highp float;
 uniform sampler2D uCELL_COLORS;
 uniform sampler2D uLUMA_RANGE;
 uniform vec2 uGRID_SIZE;
-uniform float uCELL_SIZE;
+uniform float uDOT_SIZE;
 uniform float uPITCH;
 uniform vec3 uLUMA;
 uniform vec2 uVIEWPORT;
@@ -102,7 +102,7 @@ void main() {
     float normLuma = clamp(
             (dot(color.rgb, uLUMA) - range.r) / (range.g - range.r),
             0.0, 1.0);
-    float radius = sqrt(normLuma) * uCELL_SIZE * 0.5;
+    float radius = sqrt(normLuma) * uDOT_SIZE * 0.5;
 
     // Perspective scaling (camera looks straight down +Z)
     float perspScale = uFOCAL_LEN / depth;

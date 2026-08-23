@@ -23,7 +23,9 @@ import { createWalkTransition } from "./transitions/walk/walk.ts";
 import { createWindTransition } from "./transitions/wind/wind.ts";
 import { createWipeTransition } from "./transitions/wipe/wipe.ts";
 
-export const CELL_SIZE = 5.0;
+// Diameter, in pixels, of a fully-lit halftone dot.
+export const DOT_SIZE = 5.0;
+// Distance, in pixels, between the centers of neighbouring grid cells.
 export const PITCH = 6.0;
 
 export interface HalftoneFrame {

@@ -3,7 +3,7 @@ import fullscreenQuadVert from "../../fullscreenQuad.vert.glsl" with {
 };
 import { LUMA } from "../../luma.ts";
 import {
-  CELL_SIZE,
+  DOT_SIZE,
   PITCH,
   type RendererContext,
   type Transition,
@@ -23,7 +23,7 @@ export function createWalkTransition(ctx: RendererContext): Transition {
     ctx.cols,
     ctx.rows,
   );
-  gl.uniform1f(gl.getUniformLocation(program, "uCELL_SIZE"), CELL_SIZE);
+  gl.uniform1f(gl.getUniformLocation(program, "uDOT_SIZE"), DOT_SIZE);
   gl.uniform1f(gl.getUniformLocation(program, "uPITCH"), PITCH);
   gl.uniform3f(
     gl.getUniformLocation(program, "uLUMA"),

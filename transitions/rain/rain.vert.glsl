@@ -20,7 +20,7 @@ out vec2 vOffsetPx;
 
 flat out float vSplashNorm;
 
-uniform float uCELL_SIZE;
+uniform float uDOT_SIZE;
 uniform float uPITCH;
 uniform vec3 uLUMA;
 uniform float uFALL_WINDOW;
@@ -40,7 +40,7 @@ void main() {
     0.0,
     1.0
   );
-  float halftoneRadiusPx = sqrt(lumaNorm) * uCELL_SIZE * 0.5;
+  float halftoneRadiusPx = sqrt(lumaNorm) * uDOT_SIZE * 0.5;
   vec2 cellPosPx = (cellCoordCells + 0.5) * uPITCH;
 
   vec2 dropData = texelFetch(uDROP_MAP, ivec2(col, row), 0).rg;

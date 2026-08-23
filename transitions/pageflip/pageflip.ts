@@ -1,7 +1,7 @@
 import { easeIn } from "../../easeIn.ts";
 import { LUMA } from "../../luma.ts";
 import {
-  CELL_SIZE,
+  DOT_SIZE,
   PITCH,
   type RendererContext,
   type Transition,
@@ -25,7 +25,7 @@ export function createPageflipTransition(ctx: RendererContext): Transition {
     ctx.canvasWidth,
     ctx.canvasHeight,
   );
-  gl.uniform1f(gl.getUniformLocation(program, "uCELL_SIZE"), CELL_SIZE);
+  gl.uniform1f(gl.getUniformLocation(program, "uDOT_SIZE"), DOT_SIZE);
   gl.uniform1f(gl.getUniformLocation(program, "uPITCH"), PITCH);
   gl.uniform3f(
     gl.getUniformLocation(program, "uLUMA"),

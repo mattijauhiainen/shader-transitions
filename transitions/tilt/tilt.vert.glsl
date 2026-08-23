@@ -8,7 +8,7 @@ uniform sampler2D uLUMA_RANGE_A;
 uniform sampler2D uCELL_COLORS_B;
 uniform sampler2D uLUMA_RANGE_B;
 uniform vec2 uGRID_SIZE;
-uniform float uCELL_SIZE;
+uniform float uDOT_SIZE;
 uniform float uPITCH;
 uniform vec3 uLUMA;
 
@@ -54,7 +54,7 @@ void main() {
     float normLuma = clamp(
             (dot(color.rgb, uLUMA) - range.r) / (range.g - range.r),
             0.0, 1.0);
-    float radius = sqrt(normLuma) * uCELL_SIZE * 0.5;
+    float radius = sqrt(normLuma) * uDOT_SIZE * 0.5;
 
     // World position of this dot. Center the grid on the origin so rotation
     // happens around the middle of the plane (not the corner).

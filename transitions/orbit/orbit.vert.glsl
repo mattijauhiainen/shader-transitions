@@ -12,7 +12,7 @@ uniform sampler2D uLUMA_RANGE_A;
 uniform sampler2D uLUMA_RANGE_B;
 uniform vec2 uGRID_SIZE;
 // Dot diameter at full luma, in world units (less than uPITCH).
-uniform float uCELL_SIZE;
+uniform float uDOT_SIZE;
 // World-space spacing between cell centers.
 uniform float uPITCH;
 // Weights to calculate luma for a given RGB color.
@@ -83,7 +83,7 @@ void main() {
             (dot(color.rgb, uLUMA) - range.r) / (range.g - range.r),
             0.0, 1.0
         );
-    float radius = sqrt(normLuma) * uCELL_SIZE * 0.5;
+    float radius = sqrt(normLuma) * uDOT_SIZE * 0.5;
 
     // Pixel-perfect AA, matching the resting halftone: figure out this dot's
     // apparent screen radius, then grow the billboard by half a pixel of
